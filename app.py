@@ -6,9 +6,10 @@ import requests
 import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import streamlit.components.v1 as components
 
-# 🚀 初始設定
-st.set_page_config(page_title="AI 專業看盤終端", layout="wide", initial_sidebar_state="collapsed")
+# 🚀 初始設定：寬螢幕模式
+st.set_page_config(page_title="AI 專業看盤終端 (2026 升級版)", layout="wide", initial_sidebar_state="collapsed")
 
 # --- 0. 全局風格設定 ---
 st.markdown("""
@@ -18,28 +19,25 @@ st.markdown("""
 [data-testid="stSidebar"] { display: none; }
 header {visibility: hidden;} footer {visibility: hidden;}
 div.block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
-
 .nav-pills { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
 div[data-testid="stRadio"] > div { display: flex; gap: 15px; background-color: #161b22; padding: 5px; border-radius: 8px; border: 1px solid #30363d; width: fit-content; }
-div[data-testid="stRadio"] label { cursor: pointer; padding: 8px 20px; border-radius: 6px; font-weight: bold; color: #ffffff !important; transition: 0.2s; } 
-div[data-testid="stRadio"] label:hover { color: #58a6ff !important; background-color: rgba(255,255,255,0.05); }
-div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p { font-size: 16px; margin: 0; }
+div[data-testid="stRadio"] label { cursor: pointer; padding: 8px 20px; border-radius: 6px; font-weight: bold; transition: 0.2s; }
+div[data-testid="stRadio"] label p, div[data-testid="stRadio"] label span, div[data-testid="stRadio"] label div { color: #ffffff !important; font-size: 16px; margin: 0; }
+div[data-testid="stRadio"] label:hover { background-color: rgba(255,255,255,0.05); }
+div[data-testid="stRadio"] label:hover p, div[data-testid="stRadio"] label:hover span { color: #58a6ff !important; }
 div[data-testid="stRadio"] input { display: none; }
 div[data-testid="stRadio"] label[data-baseweb="radio"] { background-color: transparent; }
-div[data-testid="stRadio"] [aria-checked="true"] { background-color: #1f3a5f !important; color: #58a6ff !important; border: 1px solid #58a6ff; }
-div[data-testid="stRadio"] [aria-checked="true"] p { color: #58a6ff !important; }
-
+div[data-testid="stRadio"] [aria-checked="true"] { background-color: #1f3a5f !important; border: 1px solid #58a6ff; }
+div[data-testid="stRadio"] [aria-checked="true"] p, div[data-testid="stRadio"] [aria-checked="true"] span { color: #58a6ff !important; }
 .top-nav-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .stTextInput input { background-color: #161b22 !important; color: #fff !important; border: 1px solid #30363d !important; border-radius: 4px; padding: 4px 8px; height: 32px; font-size: 13px;}
 button[kind="primary"] { background-color: #f85149 !important; color: #fff !important; border: none !important; border-radius: 4px !important; width: 100%; font-weight: bold; height: 32px; transition: 0.2s; padding: 0; font-size: 13px;}
 button[kind="primary"]:hover { background-color: #d13b35 !important; }
 button[kind="secondary"] { background-color: #21262d !important; color: #c9d1d9 !important; border: 1px solid #30363d !important; border-radius: 4px !important; transition: 0.2s; padding: 2px 10px !important; font-size: 12px !important; height: 28px !important; width: 100%;}
 button[kind="secondary"]:hover { background-color: #30363d !important; border-color: #8b949e !important; color: #fff !important; }
-
 .stTabs [data-baseweb="tab-list"] { gap: 4px; background-color: #161b22; padding: 8px 8px 0 8px; border-radius: 8px 8px 0 0; border: 1px solid #30363d; border-bottom: none; }
 .stTabs [data-baseweb="tab"] { background-color: #0d1117; border-radius: 6px 6px 0 0; border: 1px solid #30363d; border-bottom: none; padding: 6px 15px; color: #8b949e; font-size: 14px;}
 .stTabs [aria-selected="true"] { background-color: #1f3a5f !important; color: #58a6ff !important; border-color: #1f3a5f !important; }
-
 .d-card { background:#161b22; padding:15px; border-radius:10px; border:1px solid #30363d; margin-bottom:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
 .d-title { font-size:16px; font-weight:900; color:#fff; border-bottom:1px solid #30363d; padding-bottom:8px; margin-bottom:12px; }
 .g-2 { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
@@ -49,13 +47,11 @@ button[kind="secondary"]:hover { background-color: #30363d !important; border-co
 .m-title { font-size:11px; color:#8b949e; margin-bottom:4px; text-transform:uppercase;}
 .m-val { font-size:20px; font-weight:900; color:#fff; line-height:1.2; }
 .text-red { color:#f85149 !important; } .text-green { color:#3fb950 !important; } .text-white { color:#fff !important; } .text-yellow { color:#d29922 !important; }
-
 .flow-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px;}
 .flow-table th { color: #8b949e; text-align: right; padding: 8px; border-bottom: 1px solid #30363d; font-weight: normal;}
 .flow-table th:first-child { text-align: left; }
 .flow-table td { padding: 12px 8px; border-bottom: 1px solid #21262d; text-align: right; font-weight: bold; }
 .flow-table td:first-child { text-align: left; color: #c9d1d9; font-weight: normal;}
-
 .tooltip-container { position: relative; display: inline-block; border-bottom: 1px dotted #8b949e; cursor: help; }
 .tooltip-container .tooltip-text { visibility: hidden; width: 220px; background-color: #21262d; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 0%; border: 1px solid #58a6ff; font-size: 12px; font-weight: normal; line-height: 1.5; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
 .tooltip-container .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 10%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #58a6ff transparent transparent transparent; }
@@ -119,48 +115,24 @@ def get_chinese_name(stock_id):
 # 🌍 模組 A：大盤與資金流向
 # ========================================================
 
-# 🎯 移除 4966，加入 2313，建立記憶體板塊
 SECTOR_MAP = {
-    "半導體 (晶圓/封測)": {"2330": "台積電", "2454": "聯發科", "2303": "聯電", "3711": "日月光投控", "3142": "弘塑",
-                           "3583": "辛耘"},
-    "AI 伺服器 (ODM)": {"2382": "廣達", "3231": "緯創", "2356": "英業達", "2376": "技嘉", "2324": "仁寶",
-                        "6669": "緯穎"},
-    "AI 散熱模組": {"3324": "雙鴻", "3017": "奇鋐", "2421": "建準", "3653": "健策", "3483": "力致",
-                    "6230": "尼得科超眾"},
-    "矽光子 (CPO)": {"3363": "上詮", "3163": "波若威", "4979": "華星光", "3450": "聯鈞", "8032": "光聖", "3192": "前鼎",
-                     "3081": "聯亞", "3265": "台星科"},
-    "矽智財 (ASIC/IP)": {"3661": "世芯-KY", "3443": "創意", "3035": "智原", "3529": "力旺", "6643": "M31"},
-    "記憶體族群 💾": {"2408": "南亞科", "2344": "華邦電", "2337": "旺宏", "3260": "威剛", "8299": "群聯",
-                     "3006": "晶豪科"},
-    "低軌衛星 🛰️": {"3491": "昇達科", "2314": "台揚", "6285": "啟碁", "5388": "中磊", "3311": "閎暉", "2383": "台光電",
-                    "2313": "華通"},
-    "重電與電網": {"1519": "華城", "1513": "中興電", "1514": "亞力", "1503": "士電", "1504": "東元"},
-    "綠能與電纜": {"1609": "大亞", "1605": "華新", "6806": "森崴能源", "6869": "雲豹能源"},
-    "網通與光通訊": {"2345": "智邦", "3596": "智易", "4906": "正文", "3380": "明泰"},
-    "PCB 族群": {"2368": "金像電", "3037": "欣興", "8046": "南電", "3189": "景碩", "3044": "健鼎", "2313": "華通"},
-    "電腦週邊 (PC/NB)": {"2353": "宏碁", "2357": "華碩", "2377": "微星", "2395": "研華"},
-    "貨櫃航運": {"2603": "長榮", "2609": "陽明", "2615": "萬海"},
-    "金融保險": {"2881": "富邦金", "2882": "國泰金", "2891": "中信金", "2886": "兆豐金", "2884": "玉山金"},
-    "營建資產": {"2542": "興富發", "2548": "華固", "2520": "冠德", "2504": "國產", "5522": "遠雄"},
-    "生技醫療": {"6472": "保瑞", "1795": "美時", "6446": "藥華藥", "4743": "合一"}
+    "半導體 (晶圓/封測)": ["2330", "2454", "2303", "3711", "3142", "3583"],
+    "AI 伺服器 (ODM)": ["2382", "3231", "2356", "2376", "2324", "6669"],
+    "AI 散熱模組": ["3324", "3017", "2421", "3653", "3483", "6230"],
+    "矽光子 (CPO)": ["3363", "3163", "4979", "3450", "8032", "3192", "3081", "3265"],
+    "矽智財 (ASIC/IP)": ["3661", "3443", "3035", "3529", "6643"],
+    "記憶體族群 💾": ["2408", "2344", "2337", "3260", "8299", "3006"],
+    "低軌衛星 🛰️": ["3491", "2314", "6285", "5388", "3311", "2383", "2313"],
+    "重電與電網": ["1519", "1513", "1514", "1503", "1504"],
+    "綠能與電纜": ["1609", "1605", "6806", "6869"],
+    "網通與光通訊": ["2345", "3596", "4906", "3380"],
+    "PCB 族群": ["2368", "3037", "8046", "3189", "3044", "2313"],
+    "電腦週邊 (PC/NB)": ["2353", "2357", "2377", "2395"],
+    "貨櫃航運": ["2603", "2609", "2615"],
+    "金融保險": ["2881", "2882", "2891", "2886", "2884"],
+    "營建資產": ["2542", "2548", "2520", "2504", "5522"],
+    "生技醫療": ["6472", "1795", "6446", "4743"]
 }
-
-
-# 🎯 獨立快取 T86，保護雲端 IP 不被 Ban，並延長快取時間至 1 小時
-@st.cache_data(ttl=3600)
-def fetch_twse_t86_data(target_date_str):
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    twse_url = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={target_date_str}&selectType=ALLBUT0999&response=json"
-    res = requests.get(twse_url, headers=headers, timeout=5).json()
-    if res['stat'] == 'OK' and res.get('data'):
-        df_t86 = pd.DataFrame(res['data'], columns=res['fields'])
-        df_t86['證券代號'] = df_t86['證券代號'].astype(str)
-        df_t86['外陸資買賣超股數(不含外資自營商)'] = pd.to_numeric(
-            df_t86['外陸資買賣超股數(不含外資自營商)'].str.replace(',', ''), errors='coerce').fillna(0)
-        df_t86['投信買賣超股數'] = pd.to_numeric(df_t86['投信買賣超股數'].str.replace(',', ''), errors='coerce').fillna(
-            0)
-        return df_t86
-    return None
 
 
 @st.cache_data(ttl=120)
@@ -205,53 +177,58 @@ def get_market_data():
     market_info = {"price": live_price, "chg": chg, "chg_pct": chg_pct, "ma20": L['MA20'], "rsi": L['RSI'],
                    "status": status, "suggest": suggest, "msg": msg}
 
-    # 🎯 絕對精準日期：使用 UTC+8，強制精準定位台灣交易日
-    tz_tw = datetime.timezone(datetime.timedelta(hours=8))
-    tw_now = datetime.datetime.now(tz=tz_tw)
+    tw_now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
     target_date = tw_now
-
-    # 台灣時間下午 4 點前，T86 報表還沒出，抓前一天
     if tw_now.hour < 16: target_date -= datetime.timedelta(days=1)
-    # 跳過週末
     while target_date.weekday() >= 5: target_date -= datetime.timedelta(days=1)
 
-    target_date_str = target_date.strftime("%Y%m%d")
-    display_date = target_date.strftime("%Y-%m-%d")
+    df_t86 = pd.DataFrame()
+    attempts = 0
+    display_date = "無資料"
+
+    while attempts < 10:
+        target_date_str = target_date.strftime("%Y%m%d")
+        try:
+            twse_url = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={target_date_str}&selectType=ALLBUT0999&response=json"
+            res_t86 = requests.get(twse_url, headers=headers, timeout=5).json()
+            if res_t86['stat'] == 'OK' and len(res_t86.get('data', [])) > 0:
+                df_t86 = pd.DataFrame(res_t86['data'], columns=res_t86['fields'])
+                display_date = target_date.strftime("%Y-%m-%d")
+                break
+        except Exception:
+            pass
+        target_date -= datetime.timedelta(days=1)
+        attempts += 1
 
     sector_flow = []
-    try:
-        # 呼叫獨立且具有長效快取的抓取函數
-        df_t86 = fetch_twse_t86_data(target_date_str)
+    if not df_t86.empty:
+        df_t86['證券代號'] = df_t86['證券代號'].astype(str)
+        df_t86['外陸資買賣超股數(不含外資自營商)'] = pd.to_numeric(
+            df_t86['外陸資買賣超股數(不含外資自營商)'].str.replace(',', ''), errors='coerce').fillna(0)
+        df_t86['投信買賣超股數'] = pd.to_numeric(df_t86['投信買賣超股數'].str.replace(',', ''), errors='coerce').fillna(
+            0)
 
-        if df_t86 is not None:
-            for sector, stock_dict in SECTOR_MAP.items():
-                f_net, t_net = 0, 0
-                stock_names = []
+        for sector, stock_list in SECTOR_MAP.items():
+            f_net, t_net = 0, 0
+            stock_names = []
 
-                sector_df = df_t86[df_t86['證券代號'].isin(stock_dict.keys())]
-                if not sector_df.empty:
-                    f_net = (sector_df['外陸資買賣超股數(不含外資自營商)'].sum()) / 1000
-                    t_net = (sector_df['投信買賣超股數'].sum()) / 1000
-                    for _, row in sector_df.iterrows():
-                        # 將代碼與名稱組合，放入 Tooltip
-                        stock_names.append(f"• {row['證券代號']} {row['證券名稱']}")
+            sector_df = df_t86[df_t86['證券代號'].isin(stock_list)]
+            if not sector_df.empty:
+                f_net = (sector_df['外陸資買賣超股數(不含外資自營商)'].sum()) / 1000
+                t_net = (sector_df['投信買賣超股數'].sum()) / 1000
+                for _, row in sector_df.iterrows():
+                    stock_names.append(f"• {row['證券代號']} {row['證券名稱']}")
 
-                sector_flow.append({
-                    "sector": sector, "foreign": int(f_net), "trust": int(t_net), "total": int(f_net + t_net),
-                    "tooltip": "<br>".join(stock_names) if stock_names else "無交易資料"
-                })
-        else:
-            raise Exception("API 回傳無效資料")
+            sector_flow.append({
+                "sector": sector, "foreign": int(f_net), "trust": int(t_net), "total": int(f_net + t_net),
+                "tooltip": "<br>".join(stock_names) if stock_names else "今日無交易資料"
+            })
 
-        sector_flow = sorted(sector_flow, key=lambda x: x['total'], reverse=True)
-
-    except Exception as e:
-        print(f"TWSE Error: {e}")
-        # API 被鎖或當天休市沒資料，給予安全預設值
-        sector_flow = [{"sector": s, "foreign": 0, "trust": 0, "total": 0, "tooltip": "API連線受限或休市"} for s in
+    else:
+        sector_flow = [{"sector": s, "foreign": 0, "trust": 0, "total": 0, "tooltip": "系統連線錯誤"} for s in
                        SECTOR_MAP.keys()]
-        display_date += " (API 無資料)"
 
+    sector_flow = sorted(sector_flow, key=lambda x: x['total'], reverse=True)
     return market_info, sector_flow, display_date
 
 
@@ -410,11 +387,11 @@ def get_data(stock_id):
     df['OBV_MA14'] = df['OBV'].rolling(14, min_periods=1).mean()
     df = df.ffill().bfill()
 
-    stock_name = get_chinese_name(stock_id) or stock_id
     try:
         info = tk_obj.info
     except:
         info = {}
+    stock_name = get_chinese_name(stock_id) or info.get('shortName', stock_id) or stock_id
 
     try:
         divs = tk_obj.dividends
@@ -428,6 +405,7 @@ def get_data(stock_id):
     start_date = (tw_now - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     clean_id = stock_id.replace('.TW', '').replace('.TWO', '')
     chips_url = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInstitutionalInvestorsBuySell&data_id={clean_id}&start_date={start_date}"
+
     chips_data = {"f_buy_5d": 0, "t_buy_5d": 0, "f_consec": 0, "t_consec": 0, "status": "fail"}
     try:
         res = requests.get(chips_url, headers=headers, timeout=5).json()
@@ -478,7 +456,7 @@ def get_data(stock_id):
     return df, df_intra, tk, info, chips_data, rev_data, stock_name, quote_time, live_price, prev_close, file_date
 
 
-def calculate_factors_and_score(df, chips, live_price, prev_close):
+def calculate_factors_and_score(df, chips, live_price, prev_close, market_status):
     bulls = {"籌碼與基本面": [], "價量與型態": [], "技術指標": []}
     bears = {"籌碼與基本面": [], "價量與型態": [], "技術指標": []}
 
@@ -519,46 +497,70 @@ def calculate_factors_and_score(df, chips, live_price, prev_close):
         bulls["籌碼與基本面"].append("API 限制無法獲取籌碼")
         bears["籌碼與基本面"].append("API 限制無法獲取籌碼")
 
-    if live_price >= L['Resist']: bulls["價量與型態"].append(f"突破近 21 日壓力 ({L['Resist']:.1f})")
-    if live_price <= L['Support']: bears["價量與型態"].append(f"跌破近 21 日支撐 ({L['Support']:.1f})")
-    if L['MA14'] > L['MA21'] and P['MA14'] <= P['MA21']: bulls["價量與型態"].append("MA14 上穿 MA21")
-    if L['MA14'] < L['MA21'] and P['MA14'] >= P['MA21']: bears["價量與型態"].append("MA14 跌破 MA21")
+    if live_price >= L['Resist']: bulls["價量與型態"].append(f"強勢突破近 21 日壓力 ({L['Resist']:.1f})")
+    if live_price <= L['Support']: bears["價量與型態"].append(f"弱勢跌破近 21 日支撐 ({L['Support']:.1f})")
+    if L['MA14'] > L['MA21'] and P['MA14'] <= P['MA21']: bulls["價量與型態"].append("波段發動：MA14 上穿 MA21")
+    if L['MA14'] < L['MA21'] and P['MA14'] >= P['MA21']: bears["價量與型態"].append("波段走弱：MA14 跌破 MA21")
     if bonus2_surge: bulls["價量與型態"].append("🔥 短中線雙重金叉")
-    if bonus1_safe: bulls["價量與型態"].append("均線站穩 MA35 之上")
+    if bonus1_safe: bulls["價量與型態"].append("中期多頭：均線皆站穩 MA35 之上")
 
     vr = L['Vol_Ratio']
     if vr > 1.3:
-        bulls["價量與型態"].append(f"放量突破 7 日均量 ({vr:.1f}x)")
+        bulls["價量與型態"].append(f"今日放量突破 7 日均量 ({vr:.1f}x)")
     elif vr < 0.8:
-        bears["價量與型態"].append(f"量能低迷萎縮 ({vr:.1f}x)")
+        bears["價量與型態"].append(f"今日量能低迷萎縮 ({vr:.1f}x)")
 
     if L['OBV'] > L['OBV_MA14']:
-        bulls["技術指標"].append("OBV > 14日線 (買盤強)")
+        bulls["技術指標"].append("OBV 能量潮 > 14日均線 (買盤強)")
     else:
-        bears["技術指標"].append("OBV < 14日線 (資金流出)")
+        bears["技術指標"].append("OBV 能量潮 < 14日均線 (資金流出)")
     if L['MACD_Hist'] > 0 and P['MACD_Hist'] <= 0:
-        bulls["技術指標"].append("MACD 翻紅向上")
+        bulls["技術指標"].append("MACD 柱狀圖翻紅向上")
     elif L['MACD_Hist'] <= 0 and P['MACD_Hist'] > 0:
-        bears["技術指標"].append("MACD 翻綠向下")
+        bears["技術指標"].append("MACD 柱狀圖翻綠向下")
     if L['K'] > L['D']:
         bulls["技術指標"].append(f"KD 多頭排列 (K:{L['K']:.0f}>D:{L['D']:.0f})")
     else:
         bears["技術指標"].append(f"KD 空頭排列 (K:{L['K']:.0f}<D:{L['D']:.0f})")
+    if L['K'] < 30:
+        bulls["技術指標"].append("K值進入超賣區 (<30 醞釀反彈)")
+    elif L['K'] > 80:
+        bears["技術指標"].append("K值進入超買區 (>80 提防過熱)")
 
-    return bulls, bears, chg_pct, total_score, cond_list
+    # --- 🎯 確保輸出純單行字串的交易策略 ---
+    stop_short = min(L['MA14'], df['Low'].tail(5).min())
+    stop_swing = min(L['MA21'], L['Support'])
+    target_price = max(L['Resist'], L['BBU'])
+
+    if chg_pct <= -4.0 and live_price < L['MA21']:
+        act, clr, desc, pos = "🛑 嚴格停損", "#3fb950", "長黑跌破波段線，動能急劇流失，強烈建議出清或空手。", "0% (空手)"
+    elif total_score >= 8 and live_price > L['MA35'] and vr > 1.2:
+        act, clr, desc, pos = "🚀 積極買進", "#f85149", "爆量突破且指標共振，主升段啟動訊號明確。", "30%~50%" if market_status in [
+            "多方控盤", "健康拉回"] else "10%~20%"
+    elif total_score >= 5 and live_price > L['MA21']:
+        act, clr, desc, pos = "🟢 逢低佈局", "#f85149", "均線多頭排列，未見爆量失控，可沿 MA14 分批建倉。", "20%~30%"
+    elif (total_score <= 3 and live_price < L['MA14']) or L['K'] > 85:
+        act, clr, desc, pos = "⚠️ 逢高減碼", "#d29922", "短線指標過熱或動能衰退，面臨下壓風險，入袋為安。", "< 10%"
+    else:
+        act, clr, desc, pos = "⚖️ 觀望續抱", "#8b949e", "目前處於區間震盪，持股者續抱，空手者等待表態。", "維持現狀"
+
+    # 將 strategy_html 壓縮為純單行字串
+    strategy_html = f"<div style='background: linear-gradient(145deg, #161b22, #0d1117); border: 1px solid {clr}; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);'><div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 10px;'><div style='font-size: 20px; font-weight: 900; color: #fff;'>💼 AI 實戰交易策略</div><div style='font-size: 22px; font-weight: 900; color: {clr}; background: rgba(255,255,255,0.05); padding: 4px 15px; border-radius: 6px;'>{act}</div></div><div style='font-size: 15px; color: #c9d1d9; line-height: 1.6; margin-bottom: 20px;'>{desc}</div><div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;'><div style='background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #f85149;'><div style='font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;'>短線防守 (破線出場)</div><div style='font-size: 18px; font-weight: 900; color: #fff;'>{stop_short:.1f}</div></div><div style='background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #d29922;'><div style='font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;'>波段底線 (生命線)</div><div style='font-size: 18px; font-weight: 900; color: #fff;'>{stop_swing:.1f}</div></div><div style='background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #3fb950;'><div style='font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;'>近期壓力 (短線停利)</div><div style='font-size: 18px; font-weight: 900; color: #fff;'>{target_price:.1f}</div></div><div style='background: #21262d; padding: 12px; border-radius: 6px; border: 1px solid #30363d;'><div style='font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;'>建議投入資金水位</div><div style='font-size: 15px; font-weight: 900; color: {clr}; margin-top: 4px;'>{pos}</div></div></div></div>"
+
+    return bulls, bears, chg_pct, total_score, cond_list, strategy_html
 
 
 def generate_ai_summary(total_score, chg_pct):
-    if chg_pct <= -3.0: return "<span style='color:#3fb950; font-weight:bold;'>🥶恐慌破底</span>：帶量長黑，動能惡化，切勿摸底接刀。"
-    if chg_pct >= 4.0: return "<span style='color:#f85149; font-weight:bold;'>🚀強勢點火</span>：長紅大漲表態，短線動能極強。"
+    if chg_pct <= -3.0: return "<span style='color:#3fb950; font-weight:bold;'>🥶 恐慌破底</span>：單日帶量長黑，動能急劇惡化，切勿摸底接刀。"
+    if chg_pct >= 4.0: return "<span style='color:#f85149; font-weight:bold;'>🚀 強勢點火</span>：長紅大漲表態，短線動能極強，留意明日開盤。"
     if total_score >= 8:
-        return "<span style='color:#f85149; font-weight:bold;'>🔥主升段啟動</span>：共振指標達成，籌碼技術皆優。"
+        return "<span style='color:#f85149; font-weight:bold;'>🔥 主升段啟動</span>：波段與共振指標達成，籌碼技術皆優。"
     elif total_score >= 5:
-        return "<span style='color:#f85149; font-weight:bold;'>📈穩健偏多</span>：基礎多方成立，沿均線防守。"
+        return "<span style='color:#f85149; font-weight:bold;'>📈 穩健偏多</span>：多方條件成立，屬溫和上漲格局，沿均線防守。"
     elif total_score <= 2:
-        return "<span style='color:#3fb950; font-weight:bold;'>🧊弱勢空頭</span>：跌破關鍵均線且大戶資金流出。"
+        return "<span style='color:#3fb950; font-weight:bold;'>🧊 弱勢空頭</span>：跌破關鍵均線且大戶資金流出，建議觀望。"
     else:
-        return "<span style='color:#c9d1d9; font-weight:bold;'>⚖️區間震盪</span>：多空勢均力敵，方向未明朗。"
+        return "<span style='color:#c9d1d9; font-weight:bold;'>⚖️ 區間震盪</span>：多空勢均力敵，方向未明朗，無須急於建倉。"
 
 
 # --- 2. 繪圖模組 ---
@@ -647,6 +649,14 @@ else:
     tc = st.session_state['target']
 
     with st.spinner(f"分析 ({tc}) 中..."):
+
+        # 1. 先偷偷抓一下大盤資訊，用來輔助個股決策
+        try:
+            market_info, _, _ = get_market_data()
+            current_market_status = market_info['status'] if market_info else "多方控盤"
+        except:
+            current_market_status = "多方控盤"
+
         df, df_intra, _, info, chips, rev, stock_name, quote_time, live_price, prev_close, file_date = get_data(tc)
 
         if df is not None:
@@ -654,9 +664,11 @@ else:
             new_hist.insert(0, (tc, stock_name))
             st.session_state['history'] = new_hist[:10]
 
-            L = df.iloc[-1]
-            bulls, bears, chg_pct, total_score, cond_list = calculate_factors_and_score(df, chips, live_price,
-                                                                                        prev_close)
+            # 2. 傳入大盤狀態，計算專屬的實戰策略
+            bulls, bears, chg_pct, total_score, cond_list, strategy_html = calculate_factors_and_score(df, chips,
+                                                                                                       live_price,
+                                                                                                       prev_close,
+                                                                                                       current_market_status)
             chg = live_price - prev_close
             ai_summary = generate_ai_summary(total_score, chg_pct)
 
@@ -671,6 +683,7 @@ else:
             score_clr = "text-red" if total_score >= 7 else "text-green" if total_score <= 3 else "text-yellow"
 
 
+            # 🎯 終極防跑版：單行字串組合
             def g_list(items, bg):
                 return "".join([
                                    f"<div style='padding:4px 8px; margin-bottom:2px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:3px;'>{item}</div>"
@@ -715,20 +728,8 @@ else:
                     st.plotly_chart(draw_daily_chart(df), use_container_width=True, config={'displayModeBar': False})
                     st.markdown('</div>', unsafe_allow_html=True)
 
-                high_bdg = "<span style='color:#f85149; font-size:9px; border:1px solid #f85149; padding:1px 2px; border-radius:2px; margin-left:4px;'>新高</span>" if \
-                rev['status'] == 'success' and rev['is_high'] else ""
-                rev_val = f"{rev['revenue']:.1f}億{high_bdg}" if rev['status'] == 'success' else "無資料"
-                yoy_val = f"<span class='{'text-red' if rev['yoy'] > 0 else 'text-green'}'>{rev['yoy']:.1f}%</span>" if \
-                rev['status'] == 'success' else "-"
-
-                st.markdown(f"""
-                <div class="g-4">
-                    <div class="m-box"><div class="m-title">本月營收</div><div class="m-val" style="font-size:15px;">{rev_val}</div><div style="font-size:10px; color:#8b949e;">YoY {yoy_val}</div></div>
-                    <div class="m-box"><div class="m-title">法人共識</div><div class="m-val text-white" style="font-size:15px; text-transform:capitalize;">{info.get('recommendationKey', 'N/A').replace('_', ' ')}</div></div>
-                    <div class="m-box"><div class="m-title">本益比</div><div class="m-val text-white" style="font-size:15px;">{safe_float(info.get('trailingPE'))}</div><div style="font-size:10px; color:#8b949e;">預估 {safe_float(info.get('forwardPE'))}</div></div>
-                    <div class="m-box"><div class="m-title">殖利率</div><div class="m-val text-white" style="font-size:15px;">{safe_float(info.get('dividendYield'), True)}</div></div>
-                </div>
-                """, unsafe_allow_html=True)
+                # 🚀 輸出實戰交易策略模塊 (確保字串已無任何換行縮排)
+                st.markdown(strategy_html, unsafe_allow_html=True)
 
             with col_side:
                 st.markdown(f"""
@@ -761,6 +762,22 @@ else:
                     {check_item(cond_list[6], "飆股共振：短中線雙重金叉", "多個週期均線同時向上發散，極強勢發動特徵。")}
                     <div style="color:#8b949e; font-size:10px; margin-top:4px; font-weight:bold;">籌碼加分項 (滿分1分)</div>
                     {check_item(cond_list[7], "法人鎖碼：投信連買 >= 3 天", "投信波段集中作帳，形成強大推升力道。")}
+                </div>
+                """, unsafe_allow_html=True)
+
+                high_bdg = "<span style='color:#f85149; font-size:9px; border:1px solid #f85149; padding:1px 2px; border-radius:2px; margin-left:4px;'>新高</span>" if \
+                rev['status'] == 'success' and rev['is_high'] else ""
+                rev_val = f"{rev['revenue']:.1f}億{high_bdg}" if rev['status'] == 'success' else "無資料"
+                yoy_val = f"<span class='{'text-red' if rev['yoy'] > 0 else 'text-green'}'>{rev['yoy']:.1f}%</span>" if \
+                rev['status'] == 'success' else "-"
+
+                st.markdown(f"""
+                <div style="background:#161b22; padding:15px; border-radius:10px; border:1px solid #30363d; margin-bottom:15px;">
+                    <div style="font-size:14px; font-weight:900; color:#fff; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:10px;">💼 基本面預測</div>
+                    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+                        <div class="m-box"><div class="m-title">法人共識</div><div class="m-val text-white" style="font-size:16px; text-transform:capitalize;">{info.get('recommendationKey', 'N/A').replace('_', ' ')}</div></div>
+                        <div class="m-box"><div class="m-title">預估殖利率</div><div class="m-val text-white" style="font-size:16px;">{safe_float(info.get('dividendYield'), True)}</div></div>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
