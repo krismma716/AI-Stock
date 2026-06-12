@@ -4,12 +4,13 @@ import pandas as pd
 import numpy as np
 import requests
 import datetime
+import time
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 st.set_page_config(page_title="AI 專業看盤終端", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 0. 全局風格設定 ---
+# --- 0. 全局風格設定 (UI/UX 升級版) ---
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
@@ -17,47 +18,55 @@ st.markdown("""
 [data-testid="stSidebar"] { display: none; }
 header {visibility: hidden;} footer {visibility: hidden;}
 div.block-container { padding-top: 1rem !important; padding-bottom: 0rem !important; max-width: 98% !important; }
+
+/* 導覽列：修正對比度 */
 .nav-pills { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
 div[data-testid="stRadio"] > div { display: flex; gap: 15px; background-color: #161b22; padding: 5px; border-radius: 8px; border: 1px solid #30363d; width: fit-content; }
-div[data-testid="stRadio"] label { cursor: pointer; padding: 8px 20px; border-radius: 6px; font-weight: bold; color: #ffffff !important; transition: 0.2s; } 
-div[data-testid="stRadio"] label:hover { color: #58a6ff !important; background-color: rgba(255,255,255,0.05); }
-div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p { font-size: 16px; margin: 0; }
-div[data-testid="stRadio"] input { display: none; }
+div[data-testid="stRadio"] label { cursor: pointer; padding: 8px 20px; border-radius: 6px; font-weight: bold; transition: 0.2s; } 
 div[data-testid="stRadio"] label[data-baseweb="radio"] { background-color: transparent; }
-div[data-testid="stRadio"] [aria-checked="true"] { background-color: #1f3a5f !important; color: #58a6ff !important; border: 1px solid #58a6ff; }
-div[data-testid="stRadio"] [aria-checked="true"] p { color: #58a6ff !important; }
+div[data-testid="stRadio"] input { display: none; }
+div[data-testid="stRadio"] div[data-testid="stMarkdownContainer"] p { font-size: 15px; margin: 0; color: #8b949e !important; transition: 0.2s; font-weight: 700;}
+div[data-testid="stRadio"] label:hover { background-color: rgba(255,255,255,0.05); }
+div[data-testid="stRadio"] label:hover div[data-testid="stMarkdownContainer"] p { color: #c9d1d9 !important; }
+div[data-testid="stRadio"] [aria-checked="true"] { background-color: #1f3a5f !important; border: 1px solid #58a6ff; }
+div[data-testid="stRadio"] [aria-checked="true"] p { color: #58a6ff !important; font-weight: 900 !important;}
+
+/* 按鈕與輸入框 */
 .top-nav-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .stTextInput input { background-color: #161b22 !important; color: #fff !important; border: 1px solid #30363d !important; border-radius: 4px; padding: 4px 8px; height: 32px; font-size: 13px;}
 button[kind="primary"] { background-color: #f85149 !important; color: #fff !important; border: none !important; border-radius: 4px !important; width: 100%; font-weight: bold; height: 32px; transition: 0.2s; padding: 0; font-size: 13px;}
 button[kind="primary"]:hover { background-color: #d13b35 !important; }
-button[kind="secondary"] { background-color: #21262d !important; color: #c9d1d9 !important; border: 1px solid #30363d !important; border-radius: 4px !important; transition: 0.2s; padding: 2px 10px !important; font-size: 12px !important; height: 28px !important; width: 100%;}
-button[kind="secondary"]:hover { background-color: #30363d !important; border-color: #8b949e !important; color: #fff !important; }
-.stTabs [data-baseweb="tab-list"] { gap: 4px; background-color: #161b22; padding: 8px 8px 0 8px; border-radius: 8px 8px 0 0; border: 1px solid #30363d; border-bottom: none; }
-.stTabs [data-baseweb="tab"] { background-color: #0d1117; border-radius: 6px 6px 0 0; border: 1px solid #30363d; border-bottom: none; padding: 6px 15px; color: #8b949e; font-size: 14px;}
-.stTabs [aria-selected="true"] { background-color: #1f3a5f !important; color: #58a6ff !important; border-color: #1f3a5f !important; }
+button[kind="secondary"] { background-color: rgba(255,255,255,0.05) !important; color: #c9d1d9 !important; border: 1px solid #30363d !important; border-radius: 15px !important; transition: 0.2s; padding: 4px 12px !important; font-size: 12px !important; height: 30px !important; width: 100%; white-space: nowrap;}
+button[kind="secondary"]:hover { background-color: #1f3a5f !important; border-color: #58a6ff !important; color: #58a6ff !important; }
+
+/* 佈局與卡片 */
 .d-card { background:#161b22; padding:15px; border-radius:10px; border:1px solid #30363d; margin-bottom:15px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
-.d-title { font-size:16px; font-weight:900; color:#fff; border-bottom:1px solid #30363d; padding-bottom:8px; margin-bottom:12px; }
-.g-2 { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
 .g-3 { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
-.g-4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
 .m-box { background:#21262d; padding:12px; border-radius:8px; border:1px solid #30363d; }
 .m-title { font-size:11px; color:#8b949e; margin-bottom:4px; text-transform:uppercase;}
 .m-val { font-size:20px; font-weight:900; color:#fff; line-height:1.2; }
 .text-red { color:#f85149 !important; } .text-green { color:#3fb950 !important; } .text-white { color:#fff !important; } .text-yellow { color:#d29922 !important; }
+
+/* 表格與數字優化 */
+.tabular-nums, .m-val, .flow-table td, .flow-table th { font-variant-numeric: tabular-nums; }
+.table-wrapper { max-width: 1200px; margin: 0 auto; }
 .flow-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px;}
 .flow-table th { color: #8b949e; text-align: right; padding: 8px; border-bottom: 1px solid #30363d; font-weight: normal;}
 .flow-table th:first-child { text-align: left; }
 .flow-table td { padding: 12px 8px; border-bottom: 1px solid #21262d; text-align: right; font-weight: bold; }
 .flow-table td:first-child { text-align: left; color: #c9d1d9; font-weight: normal;}
+
+/* Tooltip & Details */
 .tooltip-container { position: relative; display: inline-block; border-bottom: 1px dotted #8b949e; cursor: help; }
 .tooltip-container .tooltip-text { visibility: hidden; width: 220px; background-color: #21262d; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 0%; border: 1px solid #58a6ff; font-size: 12px; font-weight: normal; line-height: 1.5; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
-.tooltip-container .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 10%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #58a6ff transparent transparent transparent; }
 .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
-details > summary { list-style: none; outline: none; cursor: pointer; padding: 2px; transition: 0.2s; display: flex; align-items: center; color: #c9d1d9; font-size: 12px;}
+details > summary { list-style: none; outline: none; cursor: pointer; padding: 6px; transition: 0.2s; display: flex; align-items: center; border-radius: 4px; font-size: 13px;}
 details > summary::-webkit-details-marker { display: none; }
-details > summary:hover { color: #fff; }
-.info-box { padding: 6px 10px; margin: 2px 0 6px 20px; background: rgba(88, 166, 255, 0.08); border-left: 2px solid #58a6ff; font-size: 11px; color: #8b949e; }
-.dotted-link { text-decoration: underline dotted #8b949e; text-underline-offset: 3px; margin-left: 6px; }
+details > summary:hover { background-color: rgba(255,255,255,0.05); }
+.info-box { padding: 6px 10px; margin: 2px 0 6px 24px; background: rgba(88, 166, 255, 0.08); border-left: 2px solid #58a6ff; font-size: 11px; color: #8b949e; border-radius: 0 4px 4px 0;}
+.stTabs [data-baseweb="tab-list"] { gap: 4px; background-color: #161b22; padding: 8px 8px 0 8px; border-radius: 8px 8px 0 0; border: 1px solid #30363d; border-bottom: none; }
+.stTabs [data-baseweb="tab"] { background-color: #0d1117; border-radius: 6px 6px 0 0; border: 1px solid #30363d; border-bottom: none; padding: 6px 15px; color: #8b949e; font-size: 14px;}
+.stTabs [aria-selected="true"] { background-color: #1f3a5f !important; color: #58a6ff !important; border-color: #1f3a5f !important; }
 .stSpinner > div > div { border-color: #58a6ff transparent transparent transparent !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -111,7 +120,6 @@ def get_chinese_name(stock_id):
 # ========================================================
 # 🌍 模組 A：大盤與資金流向
 # ========================================================
-
 SECTOR_MAP = {
     "半導體 (晶圓/封測)": ["2330", "2454", "2303", "3711", "3142", "3583"],
     "AI 伺服器 (ODM)": ["2382", "3231", "2356", "2376", "2324", "6669"],
@@ -194,20 +202,31 @@ def get_market_data():
     display_date = "無資料"
     fallback_mode = False
 
+    twse_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'X-Requested-With': 'XMLHttpRequest'
+    }
+
     while attempts < 5:
         target_date_str = target_date.strftime("%Y%m%d")
         try:
             twse_url = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={target_date_str}&selectType=ALLBUT0999&response=json"
-            res_t86 = requests.get(twse_url, headers=headers, timeout=5).json()
-            if res_t86['stat'] == 'OK' and len(res_t86.get('data', [])) > 0:
-                df_t86 = pd.DataFrame(res_t86['data'], columns=res_t86['fields'])
-                display_date = target_date.strftime("%Y-%m-%d")
-                break
+            res = requests.get(twse_url, headers=twse_headers, timeout=5)
+            if res.status_code == 200:
+                res_t86 = res.json()
+                if res_t86.get('stat') == 'OK' and len(res_t86.get('data', [])) > 0:
+                    df_t86 = pd.DataFrame(res_t86['data'], columns=res_t86['fields'])
+                    display_date = target_date.strftime("%Y-%m-%d")
+                    break
+                elif '沒有' in res_t86.get('stat', ''):
+                    pass
         except Exception:
             pass
         target_date -= datetime.timedelta(days=1)
         while target_date.weekday() >= 5: target_date -= datetime.timedelta(days=1)
         attempts += 1
+        time.sleep(1)
 
     sector_flow = []
 
@@ -221,42 +240,35 @@ def get_market_data():
         for sector, stock_list in SECTOR_MAP.items():
             f_net, t_net = 0, 0
             stock_names = []
-
             sector_df = df_t86[df_t86['證券代號'].isin(stock_list)]
             if not sector_df.empty:
                 f_net = (sector_df['外陸資買賣超股數(不含外資自營商)'].sum()) / 1000
                 t_net = (sector_df['投信買賣超股數'].sum()) / 1000
-                for _, row in sector_df.iterrows():
-                    stock_names.append(f"• {row['證券代號']} {row['證券名稱']}")
-
-            sector_flow.append({
-                "sector": sector, "foreign": int(f_net), "trust": int(t_net), "total": int(f_net + t_net),
-                "tooltip": "<br>".join(stock_names) if stock_names else "無指標股資料"
-            })
+                for _, row in sector_df.iterrows(): stock_names.append(f"• {row['證券代號']} {row['證券名稱']}")
+            sector_flow.append(
+                {"sector": sector, "foreign": int(f_net), "trust": int(t_net), "total": int(f_net + t_net),
+                 "tooltip": "<br>".join(stock_names) if stock_names else "無指標股資料"})
     else:
         fallback_mode = True
         try:
             fm_date = (tw_now - datetime.timedelta(days=5)).strftime("%Y-%m-%d")
             fm_url = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockTotalInstitutionalInvestors&start_date={fm_date}"
             res_fm = requests.get(fm_url, headers=headers, timeout=5).json()
-            if res_fm['msg'] == 'success' and len(res_fm.get('data', [])) > 0:
+            if res_fm.get('msg') == 'success' and len(res_fm.get('data', [])) > 0:
                 df_fm = pd.DataFrame(res_fm['data'])
                 latest_date = df_fm['date'].iloc[-1]
                 display_date = f"{latest_date} (大盤彙總)"
-
                 df_latest = df_fm[df_fm['date'] == latest_date]
                 f_total = df_latest[df_latest['name'].str.contains('Foreign')]['buy_sell'].sum() / 100000000
                 t_total = df_latest[df_latest['name'].str.contains('Trust')]['buy_sell'].sum() / 100000000
-
-                sector_flow.append({
-                    "sector": "🌟 大盤整體籌碼 (億元)", "foreign": round(f_total, 1), "trust": round(t_total, 1),
-                    "total": round(f_total + t_total, 1), "tooltip": "因證交所 API 受限，切換為全市場外資與投信買賣超總金額 (億元)"
-                })
+                sector_flow.append(
+                    {"sector": "🌟 大盤整體籌碼 (億元)", "foreign": round(f_total, 1), "trust": round(t_total, 1),
+                     "total": round(f_total + t_total, 1), "tooltip": "因證交所未回應，切換為全市場買賣超總金額 (億元)"})
             else:
                 sector_flow = [
-                    {"sector": "系統連線受限", "foreign": 0, "trust": 0, "total": 0, "tooltip": "API 封鎖中"}]
+                    {"sector": "系統連線受限", "foreign": 0, "trust": 0, "total": 0, "tooltip": "API 公共額度已滿"}]
         except:
-            sector_flow = [{"sector": "系統連線受限", "foreign": 0, "trust": 0, "total": 0, "tooltip": "API 封鎖中"}]
+            sector_flow = [{"sector": "系統連線受限", "foreign": 0, "trust": 0, "total": 0, "tooltip": "連線異常"}]
 
     sector_flow = sorted(sector_flow, key=lambda x: x['total'], reverse=True)
     return market_info, sector_flow, display_date, fallback_mode
@@ -269,33 +281,42 @@ def render_market_dashboard():
     clr = "text-red" if market['chg'] > 0 else "text-green" if market['chg'] < 0 else "text-white"
     sgn = "+" if market['chg'] > 0 else ""
 
-    st.markdown(f"""
-    <div class="d-card" style="padding: 20px 25px;">
-        <h2 style="margin:0 0 15px 0; color:#fff; font-size:20px;">🌍 大盤分析 — 加權指數</h2>
-        <div class="g-3" style="margin-bottom: 20px;">
-            <div class="m-box">
-                <div class="m-title">加權指數</div>
-                <div class="m-val {clr}" style="font-size:28px;">{market['price']:.2f}</div>
-                <div style="font-size:14px; margin-top:4px; font-weight:bold;" class="{clr}">{sgn}{market['chg']:.2f} ({sgn}{market['chg_pct']:.2f}%)</div>
+    # 🚀 絕對防禦機制：透過 replace('\n', '') 把 HTML 壓平，防止 Markdown 錯判
+    html_block = f"""
+    <div class="table-wrapper">
+        <div class="d-card" style="padding: 20px 25px; margin-bottom: 20px;">
+            <h2 style="margin:0 0 15px 0; color:#fff; font-size:20px;">🌍 大盤分析 — 加權指數</h2>
+            <div class="g-3" style="margin-bottom: 20px;">
+                <div class="m-box">
+                    <div class="m-title">加權指數</div>
+                    <div class="m-val {clr}" style="font-size:28px;">{market['price']:.2f}</div>
+                    <div style="font-size:14px; margin-top:4px; font-weight:bold;" class="{clr}">{sgn}{market['chg']:.2f} ({sgn}{market['chg_pct']:.2f}%)</div>
+                </div>
+                <div class="m-box">
+                    <div class="m-title">位階狀態</div>
+                    <div class="m-val text-white" style="font-size:24px;">{market['status']}</div>
+                    <div style="font-size:13px; color:#8b949e; margin-top:4px;">RSI: <span class="tabular-nums">{market['rsi']:.1f}</span></div>
+                </div>
+                <div class="m-box">
+                    <div class="m-title">AI 現金部位建議</div>
+                    <div class="m-val text-yellow" style="font-size:24px;">{market['suggest']}</div>
+                </div>
             </div>
-            <div class="m-box">
-                <div class="m-title">位階狀態</div>
-                <div class="m-val text-white" style="font-size:24px;">{market['status']}</div>
-                <div style="font-size:13px; color:#8b949e; margin-top:4px;">RSI: {market['rsi']:.1f}</div>
-            </div>
-            <div class="m-box">
-                <div class="m-title">AI 現金部位建議</div>
-                <div class="m-val text-yellow" style="font-size:24px;">{market['suggest']}</div>
+            <div style="background:rgba(88,166,255,0.1); border-left:3px solid #58a6ff; padding:10px 15px; border-radius:4px; color:#c9d1d9; font-size:14px; line-height:1.6;">
+                💡 <b>大盤解析：</b>{market['msg']}<br>
+                🔍 目前指數距離月線 (MA20: <span class="tabular-nums">{market['ma20']:.0f}</span>) 空間約 <b><span class="tabular-nums">{((market['price'] - market['ma20']) / market['ma20'] * 100):.1f}</span>%</b>。
             </div>
         </div>
-        <div style="background:rgba(88,166,255,0.1); border-left:3px solid #58a6ff; padding:10px 15px; border-radius:4px; color:#c9d1d9; font-size:14px; line-height:1.6;">
-            💡 <b>大盤解析：</b>{market['msg']}<br>
-            🔍 目前指數距離月線 (MA20: {market['ma20']:.0f}) 空間約 <b>{((market['price'] - market['ma20']) / market['ma20'] * 100):.1f}%</b>。
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        <div class="d-card" style="padding: 20px 25px;">
+            <h2 style="margin:0 0 5px 0; color:#fff; font-size:18px;">💰 產業資金流向 (TWSE 法人買賣超)</h2>
+            <div style="font-size:12px; color:#8b949e; margin-bottom: 15px;">資料日期：{display_date}。滑鼠游標停留在板塊名稱上可查看計算成分股。</div>
+            <table class="flow-table">
+                <thead>
+                    <tr><th style='width:30%;'>產業板塊</th><th style='width:20%;'>外資</th><th style='width:20%;'>投信</th><th style='width:30%;'>合計淨流入</th></tr>
+                </thead>
+                <tbody>
+    """
 
-    rows_html = ""
     for f in flow:
         f_clr = "text-red" if f['foreign'] > 0 else "text-green" if f['foreign'] < 0 else "text-white"
         t_clr = "text-red" if f['trust'] > 0 else "text-green" if f['trust'] < 0 else "text-white"
@@ -303,48 +324,35 @@ def render_market_dashboard():
 
         bg = "transparent"
         if f['total'] >= 10000:
-            bg = "rgba(248,81,73,0.25)"
+            bg = "rgba(248,81,73,0.20)"
         elif f['total'] >= 3000:
-            bg = "rgba(248,81,73,0.1)"
+            bg = "rgba(248,81,73,0.08)"
         elif f['total'] <= -10000:
-            bg = "rgba(63,185,80,0.25)"
+            bg = "rgba(63,185,80,0.20)"
         elif f['total'] <= -3000:
-            bg = "rgba(63,185,80,0.1)"
+            bg = "rgba(63,185,80,0.08)"
 
         icon = "🔥" if f['total'] > 3000 else "❄️" if f['total'] < -3000 else "📊"
         f_sgn = "+" if f['foreign'] > 0 else ""
         t_sgn = "+" if f['trust'] > 0 else ""
         tot_sgn = "+" if f['total'] > 0 else ""
+        val_f, val_t, val_tot = f"{f['foreign']:,}", f"{f['trust']:,}", f"{f['total']:,}"
 
-        val_f = f"{f['foreign']:,}" if fallback else f"{f['foreign']:,}"
-        val_t = f"{f['trust']:,}" if fallback else f"{f['trust']:,}"
-        val_tot = f"{f['total']:,}" if fallback else f"{f['total']:,}"
+        html_block += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr} tabular-nums'>{f_sgn}{val_f}</td><td class='{t_clr} tabular-nums'>{t_sgn}{val_t}</td><td class='{tot_clr} tabular-nums' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>"
 
-        rows_html += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr}'>{f_sgn}{val_f}</td><td class='{t_clr}'>{t_sgn}{val_t}</td><td class='{tot_clr}' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>"
+    html_block += """</tbody></table></div></div>"""
 
-    st.markdown(f"""
-    <div class="d-card" style="padding: 20px 25px;">
-        <h2 style="margin:0 0 5px 0; color:#fff; font-size:18px;">💰 產業資金流向 (TWSE 法人買賣超)</h2>
-        <div style="font-size:12px; color:#8b949e; margin-bottom: 15px;">資料日期：{display_date}。滑鼠游標停留在板塊名稱上可查看計算成分股。</div>
-        <table class="flow-table">
-            <thead>
-                <tr><th style='width:30%;'>產業板塊</th><th style='width:20%;'>外資</th><th style='width:20%;'>投信</th><th style='width:30%;'>合計淨流入</th></tr>
-            </thead>
-            <tbody>{rows_html}</tbody>
-        </table>
-    </div>
-    """, unsafe_allow_html=True)
+    # 壓縮所有換行符號後輸出
+    st.markdown(html_block.replace('\n', ''), unsafe_allow_html=True)
 
 
 # ========================================================
 # ⚡ 模組 B：個股決策終端
 # ========================================================
-
 @st.cache_data(ttl=60)
 def get_data(stock_id):
     tk = f"{stock_id}.TWO" if not stock_id.endswith(('.TW', '.TWO')) else stock_id
     tk_obj = yf.Ticker(tk)
-
     try:
         df = tk_obj.history(period="1y")
         if df.empty:
@@ -356,7 +364,6 @@ def get_data(stock_id):
         return (None,) * 11
 
     df.index = df.index.tz_localize(None)
-
     df_intra = None
     try:
         df_intra = tk_obj.history(period="1d", interval="1m")
@@ -438,6 +445,7 @@ def get_data(stock_id):
 
     start_date = (tw_now - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
     clean_id = stock_id.replace('.TW', '').replace('.TWO', '')
+
     chips_url = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInstitutionalInvestorsBuySell&data_id={clean_id}&start_date={start_date}"
     chips_data = {"f_buy_5d": 0, "t_buy_5d": 0, "f_consec": 0, "t_consec": 0, "status": "fail"}
     try:
@@ -459,7 +467,6 @@ def get_data(stock_id):
     except:
         pass
 
-    # 🚀 修正：營收拉長抓取區間，確保一定有歷史高點可供比對
     rev_start_date = (tw_now - datetime.timedelta(days=365 * 5)).strftime("%Y-%m-%d")
     rev_url = f"https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthRevenue&data_id={clean_id}&start_date={rev_start_date}"
     rev_data = {"status": "fail"}
@@ -527,8 +534,8 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
         elif chips['t_consec'] <= -2:
             bears["籌碼與基本面"].append(f"投信連續賣超 {abs(chips['t_consec'])} 天")
     else:
-        bulls["籌碼與基本面"].append("API 限制無法獲取籌碼")
-        bears["籌碼與基本面"].append("API 限制無法獲取籌碼")
+        bulls["籌碼與基本面"].append("API 公共額度限制")
+        bears["籌碼與基本面"].append("API 公共額度限制")
 
     if live_price >= L['Resist']: bulls["價量與型態"].append(f"突破近 21 日壓力 ({L['Resist']:.1f})")
     if live_price <= L['Support']: bears["價量與型態"].append(f"跌破近 21 日支撐 ({L['Support']:.1f})")
@@ -556,7 +563,6 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
     else:
         bears["技術指標"].append(f"KD 空頭排列 (K:{L['K']:.0f}<D:{L['D']:.0f})")
 
-    # 🚀 AI 實戰交易策略 (Strategy Plan)
     strategy = {}
     strategy['stop_short'] = min(L['MA14'], df['Low'].tail(5).min())
     strategy['stop_swing'] = min(L['MA21'], L['Support'])
@@ -582,7 +588,6 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
     return bulls, bears, chg_pct, total_score, cond_list, strategy
 
 
-# --- 2. 繪圖模組 ---
 def draw_daily_chart(df):
     d = df.tail(80)
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_width=[0.2, 0.7])
@@ -646,29 +651,34 @@ if st.session_state['current_page'] == "🌍 大盤與資金流向":
 # ⚡ 路由 2：個股決策終端模組
 # ========================================================
 else:
-    col_logo, col_input, col_btn, col_hist = st.columns([1, 1, 0.5, 6], gap="small")
+    col_logo, col_input, col_btn, col_hist_label, col_hist = st.columns([1.5, 1.5, 0.8, 1, 6.2], gap="small")
     with col_logo:
-        st.markdown("<div style='color:#58a6ff; font-weight:900; font-size:15px; margin-top:8px;'>⚡ 股票決策終端</div>",
+        st.markdown("<div style='color:#58a6ff; font-weight:900; font-size:16px; margin-top:8px;'>⚡ 股票決策終端</div>",
                     unsafe_allow_html=True)
     with col_input:
         st.text_input("代碼", value=st.session_state['target'], key="search_input", label_visibility="collapsed")
     with col_btn:
         if st.button("分析", type="primary", use_container_width=True): st.session_state['target'] = st.session_state[
             'search_input'].strip()
+    with col_hist_label:
+        st.markdown("<div style='color:#8b949e; font-size:12px; margin-top:10px; text-align:right;'>🕒 最近查詢：</div>",
+                    unsafe_allow_html=True)
+
     with col_hist:
-        h_cols = st.columns(len(st.session_state['history'][:10]))
-        for i, (c, n) in enumerate(st.session_state['history'][:10]):
-            with h_cols[i]:
-                if st.button(f"{c} {n[:4]}", key=f"h_{c}", type="secondary", use_container_width=True):
-                    st.session_state['target'] = c;
-                    st.rerun()
+        hist_items = st.session_state['history'][:6]
+        if hist_items:
+            h_cols = st.columns(len(hist_items))
+            for i, (c, n) in enumerate(hist_items):
+                with h_cols[i]:
+                    if st.button(f"{c} {n[:2]}", key=f"h_{c}", type="secondary", use_container_width=True):
+                        st.session_state['target'] = c;
+                        st.rerun()
 
     st.markdown("<hr style='margin: 5px 0 10px 0; border-color: #30363d;'>", unsafe_allow_html=True)
 
     tc = st.session_state['target']
 
     with st.spinner(f"分析 ({tc}) 中..."):
-
         try:
             market_info, _, _ = get_market_data()
             current_market_status = market_info['status'] if market_info else "多方控盤"
@@ -701,26 +711,30 @@ else:
 
             def g_list(items, bg):
                 return "".join([
-                                   f"<div style='padding:4px 8px; margin-bottom:2px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:3px;'>{item}</div>"
+                                   f"<div style='padding:4px 8px; margin-bottom:4px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:4px;'>{item}</div>"
                                    for item in
                                    items]) if items else "<div style='font-size:12px; color:#6e7681; padding:4px;'>-</div>"
 
 
             def g_block(cat):
-                return f"<div style='color:#8b949e; font-size:11px; margin:8px 0 2px 0;'>{cat}</div><div style='display:flex; gap:4px;'><div style='flex:1;'>{g_list(bulls[cat], 'rgba(248,81,73,0.15)')}</div><div style='flex:1;'>{g_list(bears[cat], 'rgba(63,185,80,0.15)')}</div></div>"
+                return f"<div style='color:#8b949e; font-size:11px; margin:10px 0 4px 0;'>{cat}</div><div style='display:flex; gap:6px;'><div style='flex:1;'>{g_list(bulls[cat], 'rgba(248,81,73,0.15)')}</div><div style='flex:1;'>{g_list(bears[cat], 'rgba(63,185,80,0.15)')}</div></div>"
 
 
             def check_item(is_pass, title, desc):
                 icon = "<span class='text-red'>✅</span>" if is_pass else "<span class='text-green'>❌</span>"
-                return f"<details style='margin-bottom:2px;'><summary>{icon} <span class='dotted-link'>{title}</span></summary><div class='info-box'>{desc}</div></details>"
+                return f"<details style='margin-bottom:4px; background: rgba(255,255,255,0.02); border-radius: 6px;'><summary>{icon} <span style='color:#ffffff; font-weight:bold; margin-left:6px;'>{title}</span></summary><div class='info-box' style='color:#8b949e; font-size:11px;'>{desc}</div></details>"
+
+
+            def category_header(title):
+                return f"<div style='background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; padding: 4px 8px; color: #58a6ff; font-size: 11px; font-weight: bold; margin: 12px 0 6px 0; border-radius: 2px;'>{title}</div>"
 
 
             st.markdown(f"""
             <div class="d-card" style="padding:10px 15px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
                 <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
                     <div style="color:#fff; font-size:20px; font-weight:900;">{stock_name} ({tc})</div>
-                    <div style="font-size:28px; font-weight:900;" class="{clr}">{live_price:.2f}</div>
-                    <div style="font-size:16px; font-weight:bold;" class="{clr}">{sgn}{chg:.2f} ({sgn}{chg_pct:.2f}%)</div>
+                    <div class="tabular-nums {clr}" style="font-size:28px; font-weight:900;">{live_price:.2f}</div>
+                    <div class="tabular-nums {clr}" style="font-size:16px; font-weight:bold;">{sgn}{chg:.2f} ({sgn}{chg_pct:.2f}%)</div>
                     <div style="font-size:11px; color:#8b949e;">🕒 {quote_time}</div>
                 </div>
             </div>
@@ -740,10 +754,9 @@ else:
                     st.plotly_chart(draw_daily_chart(df), use_container_width=True, config={'displayModeBar': False})
                     st.markdown('</div>', unsafe_allow_html=True)
 
-                # 🚀 這裡新增基本面群組外框
                 high_bdg = "<span style='color:#f85149; font-size:9px; border:1px solid #f85149; padding:1px 2px; border-radius:2px; margin-left:4px; display:inline-block;'>新高</span>" if \
                 rev['status'] == 'success' and rev['is_high'] else ""
-                rev_val = f"{rev['revenue']:.1f}億{high_bdg}" if rev['status'] == 'success' else "無資料"
+                rev_val = f"{rev['revenue']:.1f}億{high_bdg}" if rev['status'] == 'success' else "限制"
                 yoy_val = f"<span class='{'text-red' if rev['yoy'] > 0 else 'text-green'}'>{rev['yoy']:.1f}%</span>" if \
                 rev['status'] == 'success' else "-"
 
@@ -759,15 +772,15 @@ else:
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #f85149;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">短線防守 (破線出場)</div>
-                            <div style="font-size: 18px; font-weight: 900; color: #fff;">{strat['stop_short']:.1f}</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{strat['stop_short']:.1f}</div>
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #d29922;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">波段底線 (生命線)</div>
-                            <div style="font-size: 18px; font-weight: 900; color: #fff;">{strat['stop_swing']:.1f}</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{strat['stop_swing']:.1f}</div>
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #3fb950;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">近期壓力 (短線停利)</div>
-                            <div style="font-size: 18px; font-weight: 900; color: #fff;">{strat['target']:.1f}</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{strat['target']:.1f}</div>
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">建議投入資金水位</div>
@@ -779,46 +792,50 @@ else:
                 <div style="background:#161b22; padding:15px; border-radius:10px; border:1px solid #30363d; margin-bottom:15px;">
                     <div style="font-size:14px; font-weight:900; color:#fff; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:10px;">💼 基本面預測</div>
                     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
-                        <div class="m-box"><div class="m-title">本月營收</div><div class="m-val" style="font-size:15px;">{rev_val}</div><div style="font-size:10px; color:#8b949e; margin-top:4px;">YoY {yoy_val}</div></div>
+                        <div class="m-box"><div class="m-title">本月營收</div><div class="m-val tabular-nums" style="font-size:15px;">{rev_val}</div><div class="tabular-nums" style="font-size:10px; color:#8b949e; margin-top:4px;">YoY {yoy_val}</div></div>
                         <div class="m-box"><div class="m-title">法人共識</div><div class="m-val text-white" style="font-size:15px; text-transform:capitalize;">{info.get('recommendationKey', 'N/A').replace('_', ' ')}</div></div>
-                        <div class="m-box"><div class="m-title">本益比</div><div class="m-val text-white" style="font-size:15px;">{safe_float(info.get('trailingPE'))}</div><div style="font-size:10px; color:#8b949e; margin-top:4px;">預估 {safe_float(info.get('forwardPE'))}</div></div>
-                        <div class="m-box"><div class="m-title">殖利率</div><div class="m-val text-white" style="font-size:15px;">{safe_float(info.get('dividendYield'), True)}</div></div>
+                        <div class="m-box"><div class="m-title">本益比</div><div class="m-val tabular-nums text-white" style="font-size:15px;">{safe_float(info.get('trailingPE'))}</div><div class="tabular-nums" style="font-size:10px; color:#8b949e; margin-top:4px;">預估 {safe_float(info.get('forwardPE'))}</div></div>
+                        <div class="m-box"><div class="m-title">殖利率</div><div class="m-val tabular-nums text-white" style="font-size:15px;">{safe_float(info.get('dividendYield'), True)}</div></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
             with col_side:
                 st.markdown(f"""
-                <div class="d-card" style="padding:12px; margin-bottom:10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <div class="d-card" style="padding:15px; margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <div style="font-size:18px; font-weight:900; color:{t_color};">多空對決</div>
                         <div style="font-size:16px; font-weight:bold; background:#21262d; padding:2px 8px; border-radius:4px;" class="{score_clr}">評分 {total_score}/10</div>
                     </div>
-                    <div style="width:100%; height:4px; display:flex; border-radius:2px; overflow:hidden; margin-bottom:6px; background:#21262d;">
+                    <div style="width:100%; height:4px; display:flex; border-radius:2px; overflow:hidden; margin-bottom:8px; background:#21262d;">
                         <div style="width:{bull_pct}%; background-color:#f85149;"></div><div style="width:{bear_pct}%; background-color:#3fb950;"></div>
                     </div>
-                    <div style="display:flex; border-bottom:1px solid #30363d; padding-bottom:4px; font-size:11px; font-weight:bold;">
+                    <div style="display:flex; border-bottom:1px solid #30363d; padding-bottom:6px; font-size:11px; font-weight:bold;">
                         <div style="flex:1; text-align:center; color:#f85149;">多方 ({bull_count})</div><div style="flex:1; text-align:center; color:#3fb950;">空方 ({bear_count})</div>
                     </div>
                     {g_block("籌碼與基本面")}
                     {g_block("價量與型態")}
                     {g_block("技術指標")}
                 </div>
+                """, unsafe_allow_html=True)
 
-                <div class="d-card" style="padding:10px; padding-bottom:4px;">
-                    <div style="color:#fff; font-size:13px; font-weight:900; border-bottom:1px solid #30363d; padding-bottom:4px; margin-bottom:4px;">🏆 波段檢核清單 (點擊說明)</div>
-                    <div style="color:#8b949e; font-size:10px; margin-top:2px; font-weight:bold;">基礎五要件 (滿分5分)</div>
-                    {check_item(cond_list[0], f"站上 MA21 波段線", "股價站上月均線，趨勢由弱轉強。")}
+                # 🚀 終極修復：確保 Checklist 字串強制套用 replace 去除所有換行
+                checklist_html = f"""
+                <div class="d-card" style="padding:15px; padding-bottom:10px;">
+                    <div style="color:#fff; font-size:14px; font-weight:900; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:8px;">🏆 波段檢核清單 (點擊說明)</div>
+                    {category_header("基礎五要件 (滿分 5 分)")}
+                    {check_item(cond_list[0], "站上 MA21 波段線", "股價站上月均線，趨勢由弱轉強。")}
                     {check_item(cond_list[1], "量能充足 (> 7日均量)", "成交量大於平均，推升具備延續性。")}
                     {check_item(cond_list[2], "RSI 強勢向上 (> 50)", "多方力道勝過空方，且持續上升。")}
                     {check_item(cond_list[3], "MACD 處於多方區間", "快線大於慢線，中期趨勢多頭。")}
                     {check_item(cond_list[4], "OBV 能量潮 > 14日線", "大戶與主力真實資金正在吃貨。")}
-                    <div style="color:#8b949e; font-size:10px; margin-top:4px; font-weight:bold;">核心加分項 (滿分4分)</div>
-                    {check_item(cond_list[5], "中期多頭保護：均線站穩 MA35", "短線均線皆站上中期均線，過濾跌深反彈股。")}
+                    {category_header("核心加分項 (滿分 4 分)")}
+                    {check_item(cond_list[5], "中期多頭保護：均線站上 MA35", "短線均線皆站上中期均線，過濾跌深反彈股。")}
                     {check_item(cond_list[6], "飆股共振：短中線雙重金叉", "多個週期均線同時向上發散，極強勢發動特徵。")}
-                    <div style="color:#8b949e; font-size:10px; margin-top:4px; font-weight:bold;">籌碼加分項 (滿分1分)</div>
+                    {category_header("籌碼加分項 (滿分 1 分)")}
                     {check_item(cond_list[7], "法人鎖碼：投信連買 >= 3 天", "投信波段集中作帳，形成強大推升力道。")}
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(checklist_html.replace('\n', ''), unsafe_allow_html=True)
         else:
             st.error(f"⚠️ 找不到股票代碼 **{tc}** 的資料。可能已下市或 API 連線異常。")
