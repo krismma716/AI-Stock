@@ -5,6 +5,7 @@ import numpy as np
 import requests
 import datetime
 import time
+import textwrap
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -251,41 +252,40 @@ def render_market_dashboard():
     clr = "text-red" if market['chg'] > 0 else "text-green" if market['chg'] < 0 else "text-white"
     sgn = "+" if market['chg'] > 0 else ""
 
-    # 🚀 WebKit 安全解法：字串頂格寫，消除所有縮排，不使用 replace
     html_block = f"""
-<div class="table-wrapper">
-<div class="d-card" style="padding: 20px 25px; margin-bottom: 20px;">
-<h2 style="margin:0 0 15px 0; color:#fff; font-size:20px;">🌍 大盤分析 — 加權指數</h2>
-<div class="g-3" style="margin-bottom: 20px;">
-<div class="m-box">
-<div class="m-title">加權指數</div>
-<div class="m-val {clr}" style="font-size:28px;">{market['price']:.2f}</div>
-<div style="font-size:14px; margin-top:4px; font-weight:bold;" class="{clr}">{sgn}{market['chg']:.2f} ({sgn}{market['chg_pct']:.2f}%)</div>
-</div>
-<div class="m-box">
-<div class="m-title">位階狀態</div>
-<div class="m-val text-white" style="font-size:24px;">{market['status']}</div>
-<div style="font-size:13px; color:#8b949e; margin-top:4px;">RSI: <span class="tabular-nums">{market['rsi']:.1f}</span></div>
-</div>
-<div class="m-box">
-<div class="m-title">AI 現金部位建議</div>
-<div class="m-val text-yellow" style="font-size:24px;">{market['suggest']}</div>
-</div>
-</div>
-<div style="background:rgba(88,166,255,0.1); border-left:3px solid #58a6ff; padding:10px 15px; border-radius:4px; color:#c9d1d9; font-size:14px; line-height:1.6;">
-💡 <b>大盤解析：</b>{market['msg']}<br>
-🔍 目前指數距離月線 (MA20: <span class="tabular-nums">{market['ma20']:.0f}</span>) 空間約 <b><span class="tabular-nums">{((market['price']-market['ma20'])/market['ma20']*100):.1f}</span>%</b>。
-</div>
-</div>
-<div class="d-card" style="padding: 20px 25px;">
-<h2 style="margin:0 0 5px 0; color:#fff; font-size:18px;">💰 產業資金流向 (TWSE 法人買賣超)</h2>
-<div style="font-size:12px; color:#8b949e; margin-bottom: 15px;">資料日期：{display_date}。滑鼠游標停留在板塊名稱上可查看計算成分股。</div>
-<table class="flow-table">
-<thead>
-<tr><th style='width:30%;'>產業板塊</th><th style='width:20%;'>外資</th><th style='width:20%;'>投信</th><th style='width:30%;'>合計淨流入</th></tr>
-</thead>
-<tbody>
-"""
+    <div class="table-wrapper">
+        <div class="d-card" style="padding: 20px 25px; margin-bottom: 20px;">
+            <h2 style="margin:0 0 15px 0; color:#fff; font-size:20px;">🌍 大盤分析 — 加權指數</h2>
+            <div class="g-3" style="margin-bottom: 20px;">
+                <div class="m-box">
+                    <div class="m-title">加權指數</div>
+                    <div class="m-val {clr}" style="font-size:28px;">{market['price']:.2f}</div>
+                    <div style="font-size:14px; margin-top:4px; font-weight:bold;" class="{clr}">{sgn}{market['chg']:.2f} ({sgn}{market['chg_pct']:.2f}%)</div>
+                </div>
+                <div class="m-box">
+                    <div class="m-title">位階狀態</div>
+                    <div class="m-val text-white" style="font-size:24px;">{market['status']}</div>
+                    <div style="font-size:13px; color:#8b949e; margin-top:4px;">RSI: <span class="tabular-nums">{market['rsi']:.1f}</span></div>
+                </div>
+                <div class="m-box">
+                    <div class="m-title">AI 現金部位建議</div>
+                    <div class="m-val text-yellow" style="font-size:24px;">{market['suggest']}</div>
+                </div>
+            </div>
+            <div style="background:rgba(88,166,255,0.1); border-left:3px solid #58a6ff; padding:10px 15px; border-radius:4px; color:#c9d1d9; font-size:14px; line-height:1.6;">
+                💡 <b>大盤解析：</b>{market['msg']}<br>
+                🔍 目前指數距離月線 (MA20: <span class="tabular-nums">{market['ma20']:.0f}</span>) 空間約 <b><span class="tabular-nums">{((market['price']-market['ma20'])/market['ma20']*100):.1f}</span>%</b>。
+            </div>
+        </div>
+        <div class="d-card" style="padding: 20px 25px;">
+            <h2 style="margin:0 0 5px 0; color:#fff; font-size:18px;">💰 產業資金流向 (TWSE 法人買賣超)</h2>
+            <div style="font-size:12px; color:#8b949e; margin-bottom: 15px;">資料日期：{display_date}。滑鼠游標停留在板塊名稱上可查看計算成分股。</div>
+            <table class="flow-table">
+                <thead>
+                    <tr><th style='width:30%;'>產業板塊</th><th style='width:20%;'>外資</th><th style='width:20%;'>投信</th><th style='width:30%;'>合計淨流入</th></tr>
+                </thead>
+                <tbody>
+    """
 
     for f in flow:
         f_clr = "text-red" if f['foreign'] > 0 else "text-green" if f['foreign'] < 0 else "text-white"
@@ -304,15 +304,10 @@ def render_market_dashboard():
         tot_sgn = "+" if f['total'] > 0 else ""
         val_f, val_t, val_tot = f"{f['foreign']:,}", f"{f['trust']:,}", f"{f['total']:,}"
         
-        html_block += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr} tabular-nums'>{f_sgn}{val_f}</td><td class='{t_clr} tabular-nums'>{t_sgn}{val_t}</td><td class='{tot_clr} tabular-nums' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>\n"
+        html_block += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr} tabular-nums'>{f_sgn}{val_f}</td><td class='{t_clr} tabular-nums'>{t_sgn}{val_t}</td><td class='{tot_clr} tabular-nums' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>"
 
-    html_block += """
-</tbody>
-</table>
-</div>
-</div>
-"""
-    st.markdown(html_block, unsafe_allow_html=True)
+    html_block += """</tbody></table></div></div>"""
+    st.markdown(textwrap.dedent(html_block), unsafe_allow_html=True)
 
 
 # ========================================================
@@ -485,12 +480,13 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
     if vr > 1.3: bulls["價量與型態"].append(f"放量突破 7 日均量 ({vr:.1f}x)")
     elif vr < 0.8: bears["價量與型態"].append(f"量能低迷萎縮 ({vr:.1f}x)")
 
-    if L['OBV'] > L['OBV_MA14']: bulls["技術指標"].append("OBV 能量潮 > 14日均線 (買盤強)")
-    else: bears["技術指標"].append("OBV 能量潮 < 14日均線 (資金流出)")
+    # 🚀 將所有的 < 和 > 替換為 HTML 安全實體，防止 iOS Safari 崩潰
+    if L['OBV'] > L['OBV_MA14']: bulls["技術指標"].append("OBV 能量潮 &gt; 14日均線 (買盤強)")
+    else: bears["技術指標"].append("OBV 能量潮 &lt; 14日均線 (資金流出)")
     if L['MACD_Hist'] > 0 and P['MACD_Hist'] <= 0: bulls["技術指標"].append("MACD 翻紅向上")
     elif L['MACD_Hist'] <= 0 and P['MACD_Hist'] > 0: bears["技術指標"].append("MACD 翻綠向下")
-    if L['K'] > L['D']: bulls["技術指標"].append(f"KD 多頭排列 (K:{L['K']:.0f}>D:{L['D']:.0f})")
-    else: bears["技術指標"].append(f"KD 空頭排列 (K:{L['K']:.0f}<D:{L['D']:.0f})")
+    if L['K'] > L['D']: bulls["技術指標"].append(f"KD 多頭排列 (K:{L['K']:.0f}&gt;D:{L['D']:.0f})")
+    else: bears["技術指標"].append(f"KD 空頭排列 (K:{L['K']:.0f}&lt;D:{L['D']:.0f})")
 
     strategy = {}
     strategy['stop_short'] = min(L['MA14'], df['Low'].tail(5).min())
@@ -507,7 +503,8 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
         strategy['action'], strategy['color'], strategy['pos'] = "🟢 逢低佈局", "#f85149", "20%~30%"
         strategy['desc'] = "均線多頭排列，未見爆量失控，可沿 MA14 分批建倉。"
     elif (total_score <= 3 and live_price < L['MA14']) or L['K'] > 85:
-        strategy['action'], strategy['color'], strategy['pos'] = "⚠️ 逢高減碼", "#d29922", "< 10%"
+        # 🚀 替換這裡的 < 符號
+        strategy['action'], strategy['color'], strategy['pos'] = "⚠️ 逢高減碼", "#d29922", "&lt; 10%"
         strategy['desc'] = "短線指標過熱或動能衰退，面臨下壓風險，入袋為安。"
     else:
         strategy['action'], strategy['color'], strategy['pos'] = "⚖️ 觀望續抱", "#8b949e", "維持現狀"
@@ -620,13 +617,12 @@ else:
             def g_list(items, bg): return "".join([f"<div style='padding:4px 8px; margin-bottom:4px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:4px;'>{item}</div>" for item in items]) if items else "<div style='font-size:12px; color:#6e7681; padding:4px;'>-</div>"
             def g_block(cat): return f"<div style='color:#8b949e; font-size:11px; margin:10px 0 4px 0;'>{cat}</div><div style='display:flex; gap:6px;'><div style='flex:1;'>{g_list(bulls[cat], 'rgba(248,81,73,0.15)')}</div><div style='flex:1;'>{g_list(bears[cat], 'rgba(63,185,80,0.15)')}</div></div>"
             
-            # WebKit 安全解法：不使用多行字串，不用 replace
             def check_item(is_pass, title, desc):
                 icon = "<span class='text-red'>✅</span>" if is_pass else "<span class='text-green'>❌</span>"
-                return "<details style='margin-bottom:4px; background: rgba(255,255,255,0.02); border-radius: 6px;'><summary>" + icon + " <span style='color:#ffffff; font-weight:bold; margin-left:6px;'>" + title + "</span></summary><div class='info-box' style='color:#8b949e; font-size:11px;'>" + desc + "</div></details>"
+                return f"<details style='margin-bottom:4px; background: rgba(255,255,255,0.02); border-radius: 6px;'><summary>{icon} <span style='color:#ffffff; font-weight:bold; margin-left:6px;'>{title}</span></summary><div class='info-box' style='color:#8b949e; font-size:11px;'>{desc}</div></details>"
             
             def category_header(title):
-                return "<div style='background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; padding: 4px 8px; color: #58a6ff; font-size: 11px; font-weight: bold; margin: 12px 0 6px 0; border-radius: 2px;'>" + title + "</div>"
+                return f"<div style='background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; padding: 4px 8px; color: #58a6ff; font-size: 11px; font-weight: bold; margin: 12px 0 6px 0; border-radius: 2px;'>{title}</div>"
 
             st.markdown(f"""
             <div class="d-card" style="padding:10px 15px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
@@ -715,23 +711,23 @@ else:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 🚀 WebKit 安全解法：完全不依賴多行字串與取代，純粹串接
-                checklist_html = (
-                    '<div class="d-card" style="padding:15px; padding-bottom:10px;">' +
-                    '<div style="color:#fff; font-size:14px; font-weight:900; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:8px;">🏆 波段檢核清單 (點擊說明)</div>' +
-                    category_header("基礎五要件 (滿分 5 分)") +
-                    check_item(cond_list[0], "站上 MA21 波段線", "股價站上月均線，趨勢由弱轉強。") +
-                    check_item(cond_list[1], "量能充足 (> 7日均量)", "成交量大於平均，推升具備延續性。") +
-                    check_item(cond_list[2], "RSI 強勢向上 (> 50)", "多方力道勝過空方，且持續上升。") +
-                    check_item(cond_list[3], "MACD 處於多方區間", "快線大於慢線，中期趨勢多頭。") +
-                    check_item(cond_list[4], "OBV 能量潮 > 14日線", "大戶與主力真實資金正在吃貨。") +
-                    category_header("核心加分項 (滿分 4 分)") +
-                    check_item(cond_list[5], "中期多頭保護：均線站上 MA35", "短線均線皆站上中期均線，過濾跌深反彈股。") +
-                    check_item(cond_list[6], "飆股共振：短中線雙重金叉", "多個週期均線同時向上發散，極強勢發動特徵。") +
-                    category_header("籌碼加分項 (滿分 1 分)") +
-                    check_item(cond_list[7], "法人鎖碼：投信連買 >= 3 天", "投信波段集中作帳，形成強大推升力道。") +
-                    '</div>'
-                )
-                st.markdown(checklist_html, unsafe_allow_html=True)
+                # 🚀 將 Check Item 的 < 和 > 也替換為 HTML 實體
+                checklist_html = f"""
+                <div class="d-card" style="padding:15px; padding-bottom:10px;">
+                    <div style="color:#fff; font-size:14px; font-weight:900; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:8px;">🏆 波段檢核清單 (點擊說明)</div>
+                    {category_header("基礎五要件 (滿分 5 分)")}
+                    {check_item(cond_list[0], "站上 MA21 波段線", "股價站上月均線，趨勢由弱轉強。")}
+                    {check_item(cond_list[1], "量能充足 (&gt; 7日均量)", "成交量大於平均，推升具備延續性。")}
+                    {check_item(cond_list[2], "RSI 強勢向上 (&gt; 50)", "多方力道勝過空方，且持續上升。")}
+                    {check_item(cond_list[3], "MACD 處於多方區間", "快線大於慢線，中期趨勢多頭。")}
+                    {check_item(cond_list[4], "OBV 能量潮 &gt; 14日線", "大戶與主力真實資金正在吃貨。")}
+                    {category_header("核心加分項 (滿分 4 分)")}
+                    {check_item(cond_list[5], "中期多頭保護：均線站上 MA35", "短線均線皆站上中期均線，過濾跌深反彈股。")}
+                    {check_item(cond_list[6], "飆股共振：短中線雙重金叉", "多個週期均線同時向上發散，極強勢發動特徵。")}
+                    {category_header("籌碼加分項 (滿分 1 分)")}
+                    {check_item(cond_list[7], "法人鎖碼：投信連買 &gt;= 3 天", "投信波段集中作帳，形成強大推升力道。")}
+                </div>
+                """
+                st.markdown(textwrap.dedent(checklist_html), unsafe_allow_html=True)
         else:
             st.error(f"⚠️ 找不到股票代碼 **{tc}** 的資料。可能已下市或 API 連線異常。")
