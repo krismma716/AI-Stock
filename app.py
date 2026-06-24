@@ -307,8 +307,7 @@ def render_market_dashboard():
         html_block += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr} tabular-nums'>{f_sgn}{val_f}</td><td class='{t_clr} tabular-nums'>{t_sgn}{val_t}</td><td class='{tot_clr} tabular-nums' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>"
 
     html_block += """</tbody></table></div></div>"""
-    st.markdown(textwrap.dedent(html_block), unsafe_allow_html=True)
-
+    st.markdown(html_block.replace('\n', ''), unsafe_allow_html=True)
 
 # ========================================================
 # ⚡ 模組 B：個股決策終端
@@ -318,11 +317,11 @@ def get_data(stock_id):
     tk = f"{stock_id}.TWO" if not stock_id.endswith(('.TW','.TWO')) else stock_id
     tk_obj = yf.Ticker(tk)
     try:
-        df = tk_obj.history(period="1y")
+        df = tk_obj.history(period="2y")
         if df.empty:
             tk = f"{stock_id}.TW"
             tk_obj = yf.Ticker(tk)
-            df = tk_obj.history(period="1y")
+            df = tk_obj.history(period="2y")
             if df.empty: return (None,) * 11
     except Exception: return (None,) * 11
         
@@ -357,20 +356,33 @@ def get_data(stock_id):
         df.loc[pd.to_datetime(tw_today)] = {'Open': live_price, 'High': live_price, 'Low': live_price, 'Close': live_price, 'Volume': 0}
     df.iloc[-1, df.columns.get_loc('Close')] = live_price
 
-    df['MA7'] = df['Close'].rolling(7, min_periods=1).mean()
-    df['MA14'] = df['Close'].rolling(14, min_periods=1).mean()
-    df['MA21'] = df['Close'].rolling(21, min_periods=1).mean() 
-    df['MA35'] = df['Close'].rolling(35, min_periods=1).mean() 
+    df['SMA5'] = df['Close'].rolling(5, min_periods=1).mean()
+    df['SMA7'] = df['Close'].rolling(7, min_periods=1).mean()
+    df['SMA14'] = df['Close'].rolling(14, min_periods=1).mean()
+    df['SMA21'] = df['Close'].rolling(21, min_periods=1).mean() 
+    df['SMA35'] = df['Close'].rolling(35, min_periods=1).mean() 
+    df['SMA70'] = df['Close'].rolling(70, min_periods=1).mean() 
+    df['SMA140'] = df['Close'].rolling(140, min_periods=1).mean() 
+    df['SMA285'] = df['Close'].rolling(285, min_periods=1).mean() 
+
     df['STD21'] = df['Close'].rolling(21, min_periods=1).std().fillna(0)
-    df['BBU'] = df['MA21'] + (2 * df['STD21'])
-    df['BBL'] = df['MA21'] - (2 * df['STD21'])
+    df['BBU'] = df['SMA21'] + (2 * df['STD21'])
+    df['BBL'] = df['SMA21'] - (2 * df['STD21'])
+    
     df['Resist'] = df['High'].shift(1).rolling(21, min_periods=1).max().bfill()
     df['Support'] = df['Low'].shift(1).rolling(21, min_periods=1).min().bfill()
     
     delta = df['Close'].diff()
-    df['RSI'] = 100 - (100 / (1 + (delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean() / -delta.clip(upper=0).ewm(alpha=1/14, adjust=False).mean())))
+    gain14 = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
+    loss14 = -delta.clip(upper=0).ewm(alpha=1/14, adjust=False).mean()
+    df['RSI'] = 100 - (100 / (1 + gain14/loss14))
     df['RSI'] = df['RSI'].fillna(50) 
     
+    gain50 = delta.clip(lower=0).ewm(alpha=1/50, adjust=False).mean()
+    loss50 = -delta.clip(upper=0).ewm(alpha=1/50, adjust=False).mean()
+    df['RSI50'] = 100 - (100 / (1 + gain50/loss50))
+    df['RSI50'] = df['RSI50'].fillna(50)
+
     df['MACD'] = df['Close'].ewm(span=12).mean() - df['Close'].ewm(span=26).mean()
     df['MACD_S'] = df['MACD'].ewm(span=9).mean()
     df['MACD_Hist'] = df['MACD'] - df['MACD_S']
@@ -446,80 +458,100 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
     L, P = df.iloc[-1], df.iloc[-2] if len(df) > 1 else df.iloc[-1]
     chg_pct = ((live_price - prev_close) / prev_close) * 100 if prev_close else 0
 
-    base_c1, base_c2, base_c3, base_c4, base_c5 = live_price > L['MA21'], L['Vol_Ratio'] > 1.0, L['RSI'] > 50 and L['RSI'] > P['RSI'], L['MACD'] > L['MACD_S'], L['OBV'] > L['OBV_MA14']
+    base_c1 = live_price > L['SMA21']
+    base_c2 = L['Vol_Ratio'] > 1.0
+    base_c3 = L['RSI'] > 50 and L['RSI'] > P['RSI']
+    base_c4 = L['MACD_Hist'] > 0
+    base_c5 = L['OBV'] > L['OBV_MA14']
     base_score = sum([base_c1, base_c2, base_c3, base_c4, base_c5])
     
-    bonus1_safe = (L['MA14'] > L['MA35']) and (L['MA21'] > L['MA35'])
-    bonus2_surge = (P['MA7'] <= P['MA14'] and L['MA7'] > L['MA14']) and (P['MA14'] <= P['MA21'] and L['MA14'] > L['MA21'])
-    chip1_lock = chips['t_consec'] >= 3 if chips['status'] == 'success' else False
+    core_c1 = (L['SMA14'] > L['SMA35']) and (L['SMA21'] > L['SMA35'])
+    core_c2 = (L['SMA5'] > P['SMA5']) and (L['SMA7'] > P['SMA7']) and (L['SMA21'] > P['SMA21']) and (L['SMA7'] > L['SMA14'])
+    chip_c1 = chips['t_consec'] >= 3 if chips['status'] == 'success' else False
     
-    total_score = base_score + (bonus1_safe * 2) + (bonus2_surge * 2) + (chip1_lock * 1)
-    cond_list = [base_c1, base_c2, base_c3, base_c4, base_c5, bonus1_safe, bonus2_surge, chip1_lock]
+    total_score = base_score + (core_c1 * 2) + (core_c2 * 2) + (chip_c1 * 1)
+    cond_list = [base_c1, base_c2, base_c3, base_c4, base_c5, core_c1, core_c2, chip_c1]
 
     if chips['status'] == 'success':
         if chips['f_buy_5d'] > 0: bulls["籌碼與基本面"].append(f"外資近5日買超 {chips['f_buy_5d']:,} 張")
         elif chips['f_buy_5d'] < 0: bears["籌碼與基本面"].append(f"外資近5日賣超 {abs(chips['f_buy_5d']):,} 張")
         if chips['t_buy_5d'] > 0: bulls["籌碼與基本面"].append(f"投信近5日買超 {chips['t_buy_5d']:,} 張")
         elif chips['t_buy_5d'] < 0: bears["籌碼與基本面"].append(f"投信近5日賣超 {abs(chips['t_buy_5d']):,} 張")
-        if chips['f_consec'] >= 2: bulls["籌碼與基本面"].append(f"外資連續買超 {chips['f_consec']} 天")
-        elif chips['f_consec'] <= -2: bears["籌碼與基本面"].append(f"外資連續賣超 {abs(chips['f_consec'])} 天")
-        if chips['t_consec'] >= 2: bulls["籌碼與基本面"].append(f"投信連續買超 {chips['t_consec']} 天")
-        elif chips['t_consec'] <= -2: bears["籌碼與基本面"].append(f"投信連續賣超 {abs(chips['t_consec'])} 天")
+        if chips['f_consec'] >= 3: bulls["籌碼與基本面"].append(f"外資連續買超 {chips['f_consec']} 天")
+        elif chips['f_consec'] <= -3: bears["籌碼與基本面"].append(f"外資連續賣超 {abs(chips['f_consec'])} 天")
+        if chips['t_consec'] >= 3: bulls["籌碼與基本面"].append(f"投信連續買超 {chips['t_consec']} 天")
+        elif chips['t_consec'] <= -3: bears["籌碼與基本面"].append(f"投信連續賣超 {abs(chips['t_consec'])} 天")
     else:
         bulls["籌碼與基本面"].append("API 公共額度限制")
         bears["籌碼與基本面"].append("API 公共額度限制")
     
     if live_price >= L['Resist']: bulls["價量與型態"].append(f"突破近 21 日壓力 ({L['Resist']:.1f})")
     if live_price <= L['Support']: bears["價量與型態"].append(f"跌破近 21 日支撐 ({L['Support']:.1f})")
-    if L['MA14'] > L['MA21'] and P['MA14'] <= P['MA21']: bulls["價量與型態"].append("MA14 上穿 MA21")
-    if L['MA14'] < L['MA21'] and P['MA14'] >= P['MA21']: bears["價量與型態"].append("MA14 跌破 MA21")
-    if bonus2_surge: bulls["價量與型態"].append("🔥 短中線雙重金叉")
-    if bonus1_safe: bulls["價量與型態"].append("均線站穩 MA35 之上")
-
+    if L['SMA14'] > L['SMA21'] and P['SMA14'] <= P['SMA21']: bulls["價量與型態"].append("SMA14 上穿 SMA21")
+    if L['SMA14'] < L['SMA21'] and P['SMA14'] >= P['SMA21']: bears["價量與型態"].append("SMA14 跌破 SMA21")
+    if core_c2: bulls["價量與型態"].append("短中期均線皆向上")
+    
     vr = L['Vol_Ratio']
     if vr > 1.3: bulls["價量與型態"].append(f"放量突破 7 日均量 ({vr:.1f}x)")
     elif vr < 0.8: bears["價量與型態"].append(f"量能低迷萎縮 ({vr:.1f}x)")
-
-    # 🚀 將所有的 < 和 > 替換為 HTML 安全實體，防止 iOS Safari 崩潰
-    if L['OBV'] > L['OBV_MA14']: bulls["技術指標"].append("OBV 能量潮 &gt; 14日均線 (買盤強)")
-    else: bears["技術指標"].append("OBV 能量潮 &lt; 14日均線 (資金流出)")
-    if L['MACD_Hist'] > 0 and P['MACD_Hist'] <= 0: bulls["技術指標"].append("MACD 翻紅向上")
-    elif L['MACD_Hist'] <= 0 and P['MACD_Hist'] > 0: bears["技術指標"].append("MACD 翻綠向下")
-    if L['K'] > L['D']: bulls["技術指標"].append(f"KD 多頭排列 (K:{L['K']:.0f}&gt;D:{L['D']:.0f})")
-    else: bears["技術指標"].append(f"KD 空頭排列 (K:{L['K']:.0f}&lt;D:{L['D']:.0f})")
-
-    strategy = {}
-    strategy['stop_short'] = min(L['MA14'], df['Low'].tail(5).min())
-    strategy['stop_swing'] = min(L['MA21'], L['Support'])
-    strategy['target'] = max(L['Resist'], L['BBU'])
     
-    if chg_pct <= -4.0 and live_price < L['MA21']:
+    if chg_pct > 0 and L['MACD_Hist'] < P['MACD_Hist'] and vr < 1.0:
+        bears["價量與型態"].append("價漲但量縮且動能背離")
+
+    if L['OBV'] > L['OBV_MA14']: bulls["技術指標"].append("OBV 能量潮 &gt; 14日均線")
+    else: bears["技術指標"].append("OBV 能量潮 &lt; 14日均線")
+    
+    if L['MACD_Hist'] > 0 and P['MACD_Hist'] <= 0: bulls["技術指標"].append("Histogram 翻紅向上")
+    elif L['MACD_Hist'] < 0 and P['MACD_Hist'] >= 0: bears["技術指標"].append("Histogram 翻綠向下")
+    
+    if L['K'] < 50 and L['K'] > L['D']: bulls["技術指標"].append(f"KD 低檔金叉 (K:{L['K']:.0f}&gt;D:{L['D']:.0f})")
+    elif L['K'] > 80 and L['K'] < L['D']: bears["技術指標"].append(f"KD 高檔死叉 (K:{L['K']:.0f}&lt;D:{L['D']:.0f})")
+    
+    if L['RSI'] > 60: bulls["技術指標"].append("RSI(14) &gt; 60 短線極強")
+    elif L['RSI'] < 50: bears["技術指標"].append("RSI(14) &lt; 50 短線偏弱")
+    if L['RSI50'] > 50: bulls["技術指標"].append("RSI(50) &gt; 50 中期偏多")
+    elif L['RSI50'] < 50: bears["技術指標"].append("RSI(50) &lt; 50 中期偏弱")
+
+    stop_short = min(L['SMA14'], df['Low'].tail(5).min())
+    stop_swing = min(L['SMA21'], L['Support'])
+    target = max(L['Resist'], L['BBU'])
+    
+    # 🚀 動態劇本三階段判定邏輯
+    cond_hist_weak = L['MACD_Hist'] < P['MACD_Hist'] and L['MACD_Hist'] < 0
+    cond_rsi_weak = L['RSI'] < P['RSI'] and L['RSI'] < 60
+    cond_rsi50_weak = L['RSI50'] < 60
+    cond_vol_weak = L['Vol_Ratio'] < 0.8
+    is_take_profit = cond_hist_weak or cond_rsi_weak or cond_rsi50_weak or cond_vol_weak
+    is_super_bull = L['RSI'] > 60 and L['RSI50'] > 50 and L['MACD_Hist'] > 0
+
+    # 🚀 AI 實戰交易策略徽章：100% 同步 PDF 與劇本
+    strategy = {}
+    if chg_pct <= -3.0 or total_score <= 2:
         strategy['action'], strategy['color'], strategy['pos'] = "🛑 嚴格停損", "#3fb950", "0% (空手)"
-        strategy['desc'] = "長黑跌破波段線，動能急劇流失，強烈建議出清或空手。"
-    elif total_score >= 8 and live_price > L['MA35'] and vr > 1.2:
-        strategy['action'], strategy['color'], strategy['pos'] = "🚀 積極買進", "#f85149", "30%~50%" if market_status in ["多方控盤", "健康拉回"] else "10%~20%"
-        strategy['desc'] = "爆量突破且指標共振，主升段啟動訊號明確。"
-    elif total_score >= 5 and live_price > L['MA21']:
-        strategy['action'], strategy['color'], strategy['pos'] = "🟢 逢低佈局", "#f85149", "20%~30%"
-        strategy['desc'] = "均線多頭排列，未見爆量失控，可沿 MA14 分批建倉。"
-    elif (total_score <= 3 and live_price < L['MA14']) or L['K'] > 85:
-        # 🚀 替換這裡的 < 符號
+        strategy['desc'] = "恐慌破底或指標全面轉弱，強烈建議出清或空手觀望。"
+    elif is_take_profit:
         strategy['action'], strategy['color'], strategy['pos'] = "⚠️ 逢高減碼", "#d29922", "&lt; 10%"
         strategy['desc'] = "短線指標過熱或動能衰退，面臨下壓風險，入袋為安。"
+    elif total_score >= 8 or chg_pct >= 4.0 or is_super_bull:
+        strategy['action'], strategy['color'], strategy['pos'] = "🚀 積極買進", "#f85149", "30%~50%" if market_status in ["多方控盤", "健康拉回"] else "10%~20%"
+        strategy['desc'] = "爆量突破且指標共振，主升段啟動訊號明確。"
+    elif total_score >= 5:
+        strategy['action'], strategy['color'], strategy['pos'] = "🟢 逢低佈局", "#f85149", "20%~30%"
+        strategy['desc'] = "均線多頭排列且穩健偏多，可沿生命線分批建倉。"
     else:
         strategy['action'], strategy['color'], strategy['pos'] = "⚖️ 觀望續抱", "#8b949e", "維持現狀"
-        strategy['desc'] = "目前處於區間震盪，持股者續抱，空手者等待表態。"
+        strategy['desc'] = "目前處於區間震盪或多空交戰，持股者續抱，空手者等待表態。"
 
-    return bulls, bears, chg_pct, total_score, cond_list, strategy
+    return bulls, bears, chg_pct, total_score, cond_list, stop_short, stop_swing, target, is_take_profit, is_super_bull, L['Resist'], strategy
 
 def draw_daily_chart(df):
     d = df.tail(80) 
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_width=[0.2, 0.7])
     clrs = ['#f85149' if r['Close']>=r['Open'] else '#3fb950' for i, r in d.iterrows()]
     fig.add_trace(go.Candlestick(x=d.index, open=d['Open'], high=d['High'], low=d['Low'], close=d['Close'], increasing_line_color='#f85149', decreasing_line_color='#3fb950'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=d.index, y=d['MA14'], line=dict(color='#58a6ff', width=1.2)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=d.index, y=d['MA21'], line=dict(color='#d29922', width=1.5)), row=1, col=1) 
-    fig.add_trace(go.Scatter(x=d.index, y=d['MA35'], line=dict(color='#8b949e', width=1.5, dash='dot')), row=1, col=1) 
+    fig.add_trace(go.Scatter(x=d.index, y=d['SMA14'], line=dict(color='#58a6ff', width=1.2)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=d.index, y=d['SMA21'], line=dict(color='#d29922', width=1.5)), row=1, col=1) 
+    fig.add_trace(go.Scatter(x=d.index, y=d['SMA35'], line=dict(color='#8b949e', width=1.5, dash='dot')), row=1, col=1) 
     fig.add_trace(go.Bar(x=d.index, y=d['Volume'], marker_color=clrs), row=2, col=1)
     fig.add_trace(go.Scatter(x=d.index, y=d['VMA7'], line=dict(color='#8b949e', width=1.5, dash='dot')), row=2, col=1)
     fig.update_layout(margin=dict(l=0, r=0, t=5, b=0), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', xaxis_rangeslider_visible=False, showlegend=False, height=350)
@@ -601,12 +633,22 @@ else:
             st.session_state['history'] = new_hist[:10]
             
             L = df.iloc[-1]
-            bulls, bears, chg_pct, total_score, cond_list, strat = calculate_factors_and_score(df, chips, live_price, prev_close, current_market_status)
+            bulls, bears, chg_pct, total_score, cond_list, stop_short, stop_swing, target, is_take_profit, is_super_bull, resist, strat = calculate_factors_and_score(df, chips, live_price, prev_close, current_market_status)
             chg = live_price - prev_close
             
             clr = "text-red" if chg > 0 else "text-green" if chg < 0 else "text-white"
             sgn = "+" if chg > 0 else ""
             
+            badges = []
+            if chg_pct <= -3.0: badges.append("<span style='background:#1f3a5f; border:1px solid #3fb950; color:#3fb950; padding:4px 10px; border-radius:12px; font-size:12px; margin-left:15px; font-weight:bold;'>⚠️ 恐慌破底</span>")
+            elif chg_pct >= 4.0: badges.append("<span style='background:#1f3a5f; border:1px solid #f85149; color:#f85149; padding:4px 10px; border-radius:12px; font-size:12px; margin-left:15px; font-weight:bold;'>🔥 強勢點火</span>")
+            
+            if total_score >= 8: badges.append("<span style='background:#d29922; color:#fff; padding:4px 10px; border-radius:12px; font-size:12px; margin-left:8px; font-weight:bold;'>🚀 主升段啟動</span>")
+            elif 5 <= total_score < 8: badges.append("<span style='background:#3fb950; color:#fff; padding:4px 10px; border-radius:12px; font-size:12px; margin-left:8px; font-weight:bold;'>🟢 穩健偏多</span>")
+            elif total_score <= 2: badges.append("<span style='background:#8b949e; color:#fff; padding:4px 10px; border-radius:12px; font-size:12px; margin-left:8px; font-weight:bold;'>🛑 弱勢空頭</span>")
+            
+            badges_html = "".join(badges)
+
             bull_count, bear_count = sum([len(v) for v in bulls.values()]), sum([len(v) for v in bears.values()])
             total_c = bull_count + bear_count
             bull_pct = (bull_count / total_c * 100) if total_c > 0 else 50
@@ -614,15 +656,10 @@ else:
             t_color = "#f85149" if bull_count > bear_count else "#3fb950" if bear_count > bull_count else "#c9d1d9"
             score_clr = "text-red" if total_score >= 7 else "text-green" if total_score <= 3 else "text-yellow"
 
-            def g_list(items, bg): return "".join([f"<div style='padding:4px 8px; margin-bottom:4px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:4px;'>{item}</div>" for item in items]) if items else "<div style='font-size:12px; color:#6e7681; padding:4px;'>-</div>"
+            def g_list(items, bg): return "".join([f"<div style='padding:4px 8px; margin-bottom:4px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:4px;'>{item}</div>" for item in items]) if items else "<div style='font-size:12px; color:#484f58; padding:4px; font-style:italic;'>無訊號</div>"
             def g_block(cat): return f"<div style='color:#8b949e; font-size:11px; margin:10px 0 4px 0;'>{cat}</div><div style='display:flex; gap:6px;'><div style='flex:1;'>{g_list(bulls[cat], 'rgba(248,81,73,0.15)')}</div><div style='flex:1;'>{g_list(bears[cat], 'rgba(63,185,80,0.15)')}</div></div>"
-            
-            def check_item(is_pass, title, desc):
-                icon = "<span class='text-red'>✅</span>" if is_pass else "<span class='text-green'>❌</span>"
-                return f"<details style='margin-bottom:4px; background: rgba(255,255,255,0.02); border-radius: 6px;'><summary>{icon} <span style='color:#ffffff; font-weight:bold; margin-left:6px;'>{title}</span></summary><div class='info-box' style='color:#8b949e; font-size:11px;'>{desc}</div></details>"
-            
-            def category_header(title):
-                return f"<div style='background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; padding: 4px 8px; color: #58a6ff; font-size: 11px; font-weight: bold; margin: 12px 0 6px 0; border-radius: 2px;'>{title}</div>"
+            def check_item(is_pass, title, desc): return "<details style='margin-bottom:4px; background: rgba(255,255,255,0.02); border-radius: 6px;'><summary>" + ("<span class='text-red'>✅</span>" if is_pass else "<span class='text-green'>❌</span>") + " <span style='color:#ffffff; font-weight:bold; margin-left:6px;'>" + title + "</span></summary><div class='info-box' style='color:#8b949e; font-size:11px;'>" + desc + "</div></details>"
+            def category_header(title): return "<div style='background: rgba(88,166,255,0.1); border-left: 3px solid #58a6ff; padding: 4px 8px; color: #58a6ff; font-size: 11px; font-weight: bold; margin: 12px 0 6px 0; border-radius: 2px;'>" + title + "</div>"
 
             st.markdown(f"""
             <div class="d-card" style="padding:10px 15px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
@@ -630,10 +667,11 @@ else:
                     <div style="color:#fff; font-size:20px; font-weight:900;">{stock_name} ({tc})</div>
                     <div class="tabular-nums {clr}" style="font-size:28px; font-weight:900;">{live_price:.2f}</div>
                     <div class="tabular-nums {clr}" style="font-size:16px; font-weight:bold;">{sgn}{chg:.2f} ({sgn}{chg_pct:.2f}%)</div>
-                    <div style="font-size:11px; color:#8b949e;">🕒 {quote_time}</div>
+                    {badges_html}
+                    <div style="font-size:11px; color:#8b949e; margin-left:10px;">🕒 {quote_time}</div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """.replace('\n', ''), unsafe_allow_html=True)
             
             col_main, col_side = st.columns([1.5, 1], gap="medium")
             
@@ -648,11 +686,39 @@ else:
                     st.plotly_chart(draw_daily_chart(df), use_container_width=True, config={'displayModeBar':False})
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                high_bdg = "<span style='color:#f85149; font-size:9px; border:1px solid #f85149; padding:1px 2px; border-radius:2px; margin-left:4px; display:inline-block;'>新高</span>" if rev['status']=='success' and rev['is_high'] else ""
-                rev_val = f"{rev['revenue']:.1f}億{high_bdg}" if rev['status']=='success' else "限制"
-                yoy_val = f"<span class='{'text-red' if rev['yoy']>0 else 'text-green'}'>{rev['yoy']:.1f}%</span>" if rev['status']=='success' else "-"
+                st.markdown("<div style='font-size: 15px; font-weight: 900; color: #8b949e; margin: 15px 0 5px 0;'>🎯 設定進場成本 (動態計算風報比與盈虧)</div>", unsafe_allow_html=True)
+                col_entry, col_btn, _ = st.columns([1.5, 1, 4], gap="small")
+                with col_entry:
+                    user_entry = st.number_input("預計 / 實際進場價 (Entry)", value=float(live_price), step=1.0, label_visibility="collapsed")
+                with col_btn:
+                    st.button("🔄 更新計算", use_container_width=True)
+                
+                if user_entry > stop_swing:
+                    rr_val = (target - user_entry) / (user_entry - stop_swing)
+                    rr_text = f"{rr_val:.2f}"
+                    rr_color = "#f85149" if rr_val < 2 else "#3fb950"
+                else:
+                    rr_text = "穿價"
+                    rr_color = "#8b949e"
 
-                st.markdown(f"""
+                pnl_pct = ((live_price - user_entry) / user_entry * 100) if user_entry > 0 else 0
+                pnl_color = "text-red" if pnl_pct > 0 else "text-green" if pnl_pct < 0 else "text-white"
+                pnl_sign = "+" if pnl_pct > 0 else ""
+
+                pnl_warning = ""
+                if pnl_pct < 0 and live_price < stop_short:
+                    pnl_warning = f"<div style='margin-top: 12px; padding-top: 12px; border-top: 1px dashed #30363d; color: #c9d1d9; font-size: 13px;'>🚨 <b>個人部位警告：</b> 目前帳面虧損 <span class='{pnl_color} tabular-nums'>({pnl_pct:.2f}%)</span> 且已跌破短線防守，建議嚴格管控風險。</div>"
+                elif pnl_pct > 0 and is_take_profit:
+                    pnl_warning = f"<div style='margin-top: 12px; padding-top: 12px; border-top: 1px dashed #30363d; color: #c9d1d9; font-size: 13px;'>💡 <b>個人部位提示：</b> 目前帳面獲利 <span class='{pnl_color} tabular-nums'>({pnl_sign}{pnl_pct:.2f}%)</span>，且指標出現動能衰退，可考慮分批停利保護獲利。</div>"
+
+                if is_take_profit:
+                    script_html = "<div style='background:rgba(210,153,34,0.15); border-left:4px solid #ffcc00; padding:12px; border-radius:4px; color:#ffcc00; font-weight:bold; font-size:14px;'>⚠️ 觸發分段停利 / 減碼條件 (動能轉弱)</div>"
+                elif is_super_bull:
+                    script_html = "<div style='background:rgba(248,81,73,0.15); border-left:4px solid #f85149; padding:12px; border-radius:4px; color:#ff7b72; font-weight:bold; font-size:14px;'>🔥 【強勢提示】指標多頭共振，動能強勁，請緊抱核心倉位！</div>"
+                else:
+                    script_html = "<div style='background:rgba(63,185,80,0.15); border-left:4px solid #3fb950; padding:12px; border-radius:4px; color:#56d364; font-weight:bold; font-size:14px;'>✅ 核心倉位續抱</div>"
+
+                strategy_html = f"""
                 <div style="background: linear-gradient(145deg, #161b22, #0d1117); border: 1px solid {strat['color']}; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 10px;">
                         <div style="font-size: 20px; font-weight: 900; color: #fff;">💼 AI 實戰交易策略</div>
@@ -661,26 +727,44 @@ else:
                     <div style="font-size: 15px; color: #c9d1d9; line-height: 1.6; margin-bottom: 20px;">
                         {strat['desc']}
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                    
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #f85149;">
-                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">短線防守 (破線出場)</div>
-                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{strat['stop_short']:.1f}</div>
+                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">短線防守 (破線)</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{stop_short:.1f}</div>
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #d29922;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">波段底線 (生命線)</div>
-                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{strat['stop_swing']:.1f}</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{stop_swing:.1f}</div>
                         </div>
-                        <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #3fb950;">
-                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">近期壓力 (短線停利)</div>
-                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{strat['target']:.1f}</div>
+                        <div style="background: #21262d; padding: 12px; border-radius: 6px; border-left: 3px solid #58a6ff;">
+                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">近期壓力 (停利)</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: #fff;">{target:.1f}</div>
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
-                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">建議投入資金水位</div>
+                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">建議資金水位</div>
                             <div style="font-size: 15px; font-weight: 900; color: {strat['color']}; margin-top: 4px;">{strat['pos']}</div>
                         </div>
+                        <div style="background: #21262d; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
+                            <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">風險報酬比(RR)</div>
+                            <div class="tabular-nums" style="font-size: 18px; font-weight: 900; color: {rr_color};">{rr_text}</div>
+                        </div>
                     </div>
+                    <div style="margin-bottom: 15px; font-size: 14px; color: #c9d1d9; background: #0d1117; padding: 10px; border-radius: 4px; border: 1px solid #30363d;">
+                        🎯 <b>低吸區間：</b> <span class="tabular-nums">[{L['SMA14']:.1f} ~ {L['SMA21']:.1f}]</span> &nbsp; | &nbsp; 
+                        🚀 <b>確認進場區：</b> <span class="tabular-nums">[{resist:.1f} ~ {(resist * 1.015):.1f}]</span>
+                    </div>
+                    {script_html}
+                    {pnl_warning}
                 </div>
+                """
+                st.markdown(strategy_html.replace('\n', ''), unsafe_allow_html=True)
 
+                high_bdg = "<span style='color:#f85149; font-size:9px; border:1px solid #f85149; padding:1px 2px; border-radius:2px; margin-left:4px; display:inline-block;'>新高</span>" if rev['status']=='success' and rev['is_high'] else ""
+                rev_val = f"{rev['revenue']:.1f}億{high_bdg}" if rev['status']=='success' else "限制"
+                yoy_val = f"<span class='{'text-red' if rev['yoy']>0 else 'text-green'}'>{rev['yoy']:.1f}%</span>" if rev['status']=='success' else "-"
+
+                st.markdown(f"""
                 <div style="background:#161b22; padding:15px; border-radius:10px; border:1px solid #30363d; margin-bottom:15px;">
                     <div style="font-size:14px; font-weight:900; color:#fff; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:10px;">💼 基本面預測</div>
                     <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
@@ -690,7 +774,7 @@ else:
                         <div class="m-box"><div class="m-title">殖利率</div><div class="m-val tabular-nums text-white" style="font-size:15px;">{safe_float(info.get('dividendYield'), True)}</div></div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """.replace('\n', ''), unsafe_allow_html=True)
 
             with col_side:
                 st.markdown(f"""
@@ -709,25 +793,24 @@ else:
                     {g_block("價量與型態")}
                     {g_block("技術指標")}
                 </div>
-                """, unsafe_allow_html=True)
+                """.replace('\n', ''), unsafe_allow_html=True)
                 
-                # 🚀 將 Check Item 的 < 和 > 也替換為 HTML 實體
-                checklist_html = f"""
-                <div class="d-card" style="padding:15px; padding-bottom:10px;">
-                    <div style="color:#fff; font-size:14px; font-weight:900; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:8px;">🏆 波段檢核清單 (點擊說明)</div>
-                    {category_header("基礎五要件 (滿分 5 分)")}
-                    {check_item(cond_list[0], "站上 MA21 波段線", "股價站上月均線，趨勢由弱轉強。")}
-                    {check_item(cond_list[1], "量能充足 (&gt; 7日均量)", "成交量大於平均，推升具備延續性。")}
-                    {check_item(cond_list[2], "RSI 強勢向上 (&gt; 50)", "多方力道勝過空方，且持續上升。")}
-                    {check_item(cond_list[3], "MACD 處於多方區間", "快線大於慢線，中期趨勢多頭。")}
-                    {check_item(cond_list[4], "OBV 能量潮 &gt; 14日線", "大戶與主力真實資金正在吃貨。")}
-                    {category_header("核心加分項 (滿分 4 分)")}
-                    {check_item(cond_list[5], "中期多頭保護：均線站上 MA35", "短線均線皆站上中期均線，過濾跌深反彈股。")}
-                    {check_item(cond_list[6], "飆股共振：短中線雙重金叉", "多個週期均線同時向上發散，極強勢發動特徵。")}
-                    {category_header("籌碼加分項 (滿分 1 分)")}
-                    {check_item(cond_list[7], "法人鎖碼：投信連買 &gt;= 3 天", "投信波段集中作帳，形成強大推升力道。")}
-                </div>
-                """
-                st.markdown(textwrap.dedent(checklist_html), unsafe_allow_html=True)
+                checklist_html = (
+                    '<div class="d-card" style="padding:15px; padding-bottom:10px;">' +
+                    '<div style="color:#fff; font-size:14px; font-weight:900; border-bottom:1px solid #30363d; padding-bottom:6px; margin-bottom:8px;">🏆 波段檢核清單 (滿分 10 分)</div>' +
+                    category_header("基礎五要件 (各 1 分)") +
+                    check_item(cond_list[0], "現價 &gt; SMA21 波段線", "股價站上月均線，趨勢由弱轉強。") +
+                    check_item(cond_list[1], "量能充足 (&gt; 7日均量)", "成交量大於平均，推升具備延續性。") +
+                    check_item(cond_list[2], "RSI(14) &gt; 50 且向上", "多方力道勝過空方，且持續上升。") +
+                    check_item(cond_list[3], "MACD &gt; Signal", "快線大於慢線，中期趨勢多頭。") +
+                    check_item(cond_list[4], "OBV &gt; 14日均線", "大戶與主力真實資金正在吃貨。") +
+                    category_header("核心加分項 (各 2 分)") +
+                    check_item(cond_list[5], "中期多頭保護：均線站上 MA35", "短線均線皆站上中期均線，過濾跌深反彈股。") +
+                    check_item(cond_list[6], "均線發散：SMA5/7/21 皆向上", "多個週期均線同時向上，極強勢發動特徵。") +
+                    category_header("籌碼加分項 (滿分 1 分)") +
+                    check_item(cond_list[7], "法人鎖碼：投信連買 &gt;= 3 天", "投信波段集中作帳，形成強大推升力道。") +
+                    '</div>'
+                )
+                st.markdown(checklist_html, unsafe_allow_html=True)
         else:
             st.error(f"⚠️ 找不到股票代碼 **{tc}** 的資料。可能已下市或 API 連線異常。")
