@@ -61,6 +61,13 @@ button[kind="secondary"]:hover { background-color: #1f3a5f !important; border-co
 .tooltip-container { position: relative; display: inline-block; border-bottom: 1px dotted #8b949e; cursor: help; }
 .tooltip-container .tooltip-text { visibility: hidden; width: 220px; background-color: #21262d; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 0%; border: 1px solid #58a6ff; font-size: 12px; font-weight: normal; line-height: 1.5; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
 .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+/* 🚀 新增區間說明專用 Tooltip，向上顯示以避免被卡片擋住 */
+.zone-tooltip { position: relative; display: inline-block; border-bottom: 1px dotted #c9d1d9; cursor: help; color: #fff;}
+.zone-tooltip .zone-text { visibility: hidden; width: 260px; background-color: #0d1117; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 10; bottom: 130%; left: 50%; margin-left: -130px; border: 1px solid #30363d; font-size: 12px; font-weight: normal; line-height: 1.6; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
+.zone-tooltip .zone-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #30363d transparent transparent transparent; }
+.zone-tooltip:hover .zone-text { visibility: visible; opacity: 1; }
+
 details > summary { list-style: none; outline: none; cursor: pointer; padding: 6px; transition: 0.2s; display: flex; align-items: center; border-radius: 4px; font-size: 13px;}
 details > summary::-webkit-details-marker { display: none; }
 details > summary:hover { background-color: rgba(255,255,255,0.05); }
@@ -516,33 +523,33 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
     stop_swing = min(L['SMA21'], L['Support'])
     target = max(L['Resist'], L['BBU'])
     
-    # 🚀 動態劇本三階段判定邏輯
+    status_label = ""
+    is_strong_tier = False
+    
+    if chg_pct <= -3.0: status_label = "恐慌破底"
+    elif chg_pct >= 4.0: 
+        status_label = "強勢點火"
+        is_strong_tier = True
+    elif total_score >= 8: 
+        status_label = "主升段啟動"
+        is_strong_tier = True
+    elif 5 <= total_score < 8: status_label = "穩健偏多"
+    elif total_score <= 2: status_label = "弱勢空頭"
+    else: status_label = "區間震盪"
+
     cond_hist_weak = L['MACD_Hist'] < P['MACD_Hist'] and L['MACD_Hist'] < 0
     cond_rsi_weak = L['RSI'] < P['RSI'] and L['RSI'] < 60
     cond_rsi50_weak = L['RSI50'] < 60
     cond_vol_weak = L['Vol_Ratio'] < 0.8
     is_take_profit = cond_hist_weak or cond_rsi_weak or cond_rsi50_weak or cond_vol_weak
-    is_super_bull = L['RSI'] > 60 and L['RSI50'] > 50 and L['MACD_Hist'] > 0
+    
+    is_super_bull = L['RSI'] > 60 and L['RSI50'] > 50 and L['SMA5'] > P['SMA5'] and L['SMA7'] > P['SMA7'] and L['SMA21'] > P['SMA21'] and L['MACD_Hist'] > 0 and L['MACD_Hist'] > P['MACD_Hist'] and vr > 1.0
 
-    # 🚀 AI 實戰交易策略徽章：100% 同步 PDF 與劇本
     strategy = {}
-    if chg_pct <= -3.0 or total_score <= 2:
-        strategy['action'], strategy['color'], strategy['pos'] = "🛑 嚴格停損", "#3fb950", "0% (空手)"
-        strategy['desc'] = "恐慌破底或指標全面轉弱，強烈建議出清或空手觀望。"
-    elif is_take_profit:
-        strategy['action'], strategy['color'], strategy['pos'] = "⚠️ 逢高減碼", "#d29922", "&lt; 10%"
-        strategy['desc'] = "短線指標過熱或動能衰退，面臨下壓風險，入袋為安。"
-    elif total_score >= 8 or chg_pct >= 4.0 or is_super_bull:
-        strategy['action'], strategy['color'], strategy['pos'] = "🚀 積極買進", "#f85149", "30%~50%" if market_status in ["多方控盤", "健康拉回"] else "10%~20%"
-        strategy['desc'] = "爆量突破且指標共振，主升段啟動訊號明確。"
-    elif total_score >= 5:
-        strategy['action'], strategy['color'], strategy['pos'] = "🟢 逢低佈局", "#f85149", "20%~30%"
-        strategy['desc'] = "均線多頭排列且穩健偏多，可沿生命線分批建倉。"
-    else:
-        strategy['action'], strategy['color'], strategy['pos'] = "⚖️ 觀望續抱", "#8b949e", "維持現狀"
-        strategy['desc'] = "目前處於區間震盪或多空交戰，持股者續抱，空手者等待表態。"
+    strategy['user_status'] = status_label
+    strategy['is_strong'] = is_strong_tier
 
-    return bulls, bears, chg_pct, total_score, cond_list, stop_short, stop_swing, target, is_take_profit, is_super_bull, L['Resist'], strategy
+    return bulls, bears, chg_pct, total_score, cond_list, stop_short, stop_swing, target, is_take_profit, is_super_bull, L['Resist'], strategy, L
 
 def draw_daily_chart(df):
     d = df.tail(80) 
@@ -632,8 +639,7 @@ else:
             new_hist.insert(0, (tc, stock_name))
             st.session_state['history'] = new_hist[:10]
             
-            L = df.iloc[-1]
-            bulls, bears, chg_pct, total_score, cond_list, stop_short, stop_swing, target, is_take_profit, is_super_bull, resist, strat = calculate_factors_and_score(df, chips, live_price, prev_close, current_market_status)
+            bulls, bears, chg_pct, total_score, cond_list, stop_short, stop_swing, target, is_take_profit, is_super_bull, resist, strat, L_data = calculate_factors_and_score(df, chips, live_price, prev_close, current_market_status)
             chg = live_price - prev_close
             
             clr = "text-red" if chg > 0 else "text-green" if chg < 0 else "text-white"
@@ -693,13 +699,52 @@ else:
                 with col_btn:
                     st.button("🔄 更新計算", use_container_width=True)
                 
+                rr_warning = False
                 if user_entry > stop_swing:
                     rr_val = (target - user_entry) / (user_entry - stop_swing)
                     rr_text = f"{rr_val:.2f}"
-                    rr_color = "#f85149" if rr_val < 2 else "#3fb950"
+                    if rr_val < 2.0:
+                        rr_color = "#f85149"
+                        rr_warning = True
+                    else:
+                        rr_color = "#3fb950"
                 else:
                     rr_text = "穿價"
                     rr_color = "#8b949e"
+
+                action_badge = ""
+                action_color = ""
+                action_pos = ""
+                action_desc = ""
+
+                if strat['user_status'] == "恐慌破底" or strat['user_status'] == "弱勢空頭":
+                    action_badge = "🛑 嚴格停損"
+                    action_color = "#3fb950"
+                    action_pos = "0% (空手)"
+                    action_desc = "恐慌破底或指標全面轉弱，強烈建議出清或空手觀望。"
+                elif strat['is_strong']:
+                    action_badge = f"🚀 {strat['user_status']}"
+                    action_color = "#f85149"
+                    action_pos = "30%~50%"
+                    if rr_warning:
+                        action_desc = "多方動能強勁，唯現價拉離防守點使單筆追高風報比較低，建議保留核心倉位，新資金採拉回低吸區間分批佈局。"
+                    else:
+                        action_desc = "強勢位階且風報比合理，主升段啟動訊號明確，可積極建倉或加碼。"
+                elif rr_warning:
+                    action_badge = "⚠️ 逢高減碼"
+                    action_color = "#d29922"
+                    action_pos = "&lt; 10%"
+                    action_desc = "風險報酬比小於 2 (風報比不佳)，且未達強勢位階，建議逢高減碼，切勿追價。"
+                elif strat['user_status'] == "穩健偏多":
+                    action_badge = "🟢 逢低佈局"
+                    action_color = "#f85149"
+                    action_pos = "20%~30%"
+                    action_desc = "均線多頭排列且穩健偏多，可沿生命線分批建倉。"
+                else:
+                    action_badge = "⚖️ 觀望續抱"
+                    action_color = "#8b949e"
+                    action_pos = "維持現狀"
+                    action_desc = "目前處於區間震盪或多空交戰，持股者續抱，空手者等待表態。"
 
                 pnl_pct = ((live_price - user_entry) / user_entry * 100) if user_entry > 0 else 0
                 pnl_color = "text-red" if pnl_pct > 0 else "text-green" if pnl_pct < 0 else "text-white"
@@ -711,21 +756,33 @@ else:
                 elif pnl_pct > 0 and is_take_profit:
                     pnl_warning = f"<div style='margin-top: 12px; padding-top: 12px; border-top: 1px dashed #30363d; color: #c9d1d9; font-size: 13px;'>💡 <b>個人部位提示：</b> 目前帳面獲利 <span class='{pnl_color} tabular-nums'>({pnl_sign}{pnl_pct:.2f}%)</span>，且指標出現動能衰退，可考慮分批停利保護獲利。</div>"
 
-                if is_take_profit:
+                trailing_stops = []
+                if live_price < L_data['SMA7']: trailing_stops.append("跌破 SMA7：主升段動能減弱，建議主升段部位減碼。")
+                if live_price < L_data['SMA14']: trailing_stops.append("跌破 SMA14：短線趨勢轉弱，建議續抱段再減碼。")
+                if live_price < L_data['SMA21'] or live_price < L_data['Support']: trailing_stops.append("跌破 SMA21 或前波低點：結構撤退，波段多單建議全數出清。")
+                
+                trailing_html = ""
+                if trailing_stops:
+                    t_items = "<br>".join([f"• {t}" for t in trailing_stops])
+                    trailing_html = f"<div style='margin-top:10px; padding:10px; background:rgba(248,81,73,0.1); border-left:3px solid #f85149; font-size:13px; color:#ff7b72;'><b>🚨 移動停損觸發：</b><br>{t_items}</div>"
+
+                if trailing_stops:
+                    script_html = trailing_html
+                elif is_take_profit:
                     script_html = "<div style='background:rgba(210,153,34,0.15); border-left:4px solid #ffcc00; padding:12px; border-radius:4px; color:#ffcc00; font-weight:bold; font-size:14px;'>⚠️ 觸發分段停利 / 減碼條件 (動能轉弱)</div>"
                 elif is_super_bull:
-                    script_html = "<div style='background:rgba(248,81,73,0.15); border-left:4px solid #f85149; padding:12px; border-radius:4px; color:#ff7b72; font-weight:bold; font-size:14px;'>🔥 【強勢提示】指標多頭共振，動能強勁，請緊抱核心倉位！</div>"
+                    script_html = "<div style='background:rgba(248,81,73,0.15); border-left:4px solid #f85149; padding:12px; border-radius:4px; color:#ff7b72; font-weight:bold; font-size:14px;'>🔥 【推薦進攻條件滿足】指標多頭共振，動能強勁，請緊抱核心倉位！</div>"
                 else:
                     script_html = "<div style='background:rgba(63,185,80,0.15); border-left:4px solid #3fb950; padding:12px; border-radius:4px; color:#56d364; font-weight:bold; font-size:14px;'>✅ 核心倉位續抱</div>"
 
                 strategy_html = f"""
-                <div style="background: linear-gradient(145deg, #161b22, #0d1117); border: 1px solid {strat['color']}; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                <div style="background: linear-gradient(145deg, #161b22, #0d1117); border: 1px solid {action_color}; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 10px;">
                         <div style="font-size: 20px; font-weight: 900; color: #fff;">💼 AI 實戰交易策略</div>
-                        <div style="font-size: 22px; font-weight: 900; color: {strat['color']}; background: rgba(255,255,255,0.05); padding: 4px 15px; border-radius: 6px;">{strat['action']}</div>
+                        <div style="font-size: 22px; font-weight: 900; color: {action_color}; background: rgba(255,255,255,0.05); padding: 4px 15px; border-radius: 6px;">{action_badge}</div>
                     </div>
                     <div style="font-size: 15px; color: #c9d1d9; line-height: 1.6; margin-bottom: 20px;">
-                        {strat['desc']}
+                        {action_desc}
                     </div>
                     
                     <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
@@ -743,7 +800,7 @@ else:
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">建議資金水位</div>
-                            <div style="font-size: 15px; font-weight: 900; color: {strat['color']}; margin-top: 4px;">{strat['pos']}</div>
+                            <div style="font-size: 15px; font-weight: 900; color: {action_color}; margin-top: 4px;">{action_pos}</div>
                         </div>
                         <div style="background: #21262d; padding: 12px; border-radius: 6px; border: 1px solid #30363d;">
                             <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px;">風險報酬比(RR)</div>
@@ -751,8 +808,8 @@ else:
                         </div>
                     </div>
                     <div style="margin-bottom: 15px; font-size: 14px; color: #c9d1d9; background: #0d1117; padding: 10px; border-radius: 4px; border: 1px solid #30363d;">
-                        🎯 <b>低吸區間：</b> <span class="tabular-nums">[{L['SMA14']:.1f} ~ {L['SMA21']:.1f}]</span> &nbsp; | &nbsp; 
-                        🚀 <b>確認進場區：</b> <span class="tabular-nums">[{resist:.1f} ~ {(resist * 1.015):.1f}]</span>
+                        <div class="zone-tooltip">🎯 <b>低吸區間：</b> <span class="tabular-nums">[{min(L_data['SMA14'], L_data['SMA21']):.1f} ~ {max(L_data['SMA14'], L_data['SMA21']):.1f}]</span><span class="zone-text">股價拉回至短中期均線 (SMA14~SMA21) 之間的強力支撐帶，適合不追高、左側逢低佈局的買點。</span></div> &nbsp; | &nbsp; 
+                        <div class="zone-tooltip">🚀 <b>確認進場區：</b> <span class="tabular-nums">[{resist:.1f} ~ {(resist * 1.015):.1f}]</span><span class="zone-text">股價剛突破近 21 日最高點 (前壓) 且溢價在 1.5% 內的甜蜜點。適合右側順勢交易，超過此區間則追高風險較大。</span></div>
                     </div>
                     {script_html}
                     {pnl_warning}
