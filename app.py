@@ -57,12 +57,15 @@ button[kind="secondary"]:hover { background-color: #1f3a5f !important; border-co
 .flow-table td { padding: 12px 8px; border-bottom: 1px solid #21262d; text-align: right; font-weight: bold; }
 .flow-table td:first-child { text-align: left; color: #c9d1d9; font-weight: normal;}
 
-/* Tooltip & Details */
-.tooltip-container { position: relative; display: inline-block; border-bottom: 1px dotted #8b949e; cursor: help; }
-.tooltip-container .tooltip-text { visibility: hidden; width: 220px; background-color: #21262d; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 1; bottom: 125%; left: 0%; border: 1px solid #58a6ff; font-size: 12px; font-weight: normal; line-height: 1.5; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+/* Tooltip (大盤與多空對決共用) */
+.tooltip-container { position: relative; display: inline-block; cursor: help; width: 100%;}
+/* 如果是有底線的文字才加虛線 */
+.has-dotted { border-bottom: 1px dotted #8b949e; }
+.tooltip-container .tooltip-text { visibility: hidden; width: 220px; background-color: #21262d; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 8px 12px; position: absolute; z-index: 50; bottom: 125%; left: 50%; transform: translateX(-50%); border: 1px solid #58a6ff; font-size: 12px; font-weight: normal; line-height: 1.5; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
+.tooltip-container .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #58a6ff transparent transparent transparent; }
 .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
 
-/* 🚀 新增區間說明專用 Tooltip，向上顯示以避免被卡片擋住 */
+/* 區間說明專用 Tooltip */
 .zone-tooltip { position: relative; display: inline-block; border-bottom: 1px dotted #c9d1d9; cursor: help; color: #fff;}
 .zone-tooltip .zone-text { visibility: hidden; width: 260px; background-color: #0d1117; color: #c9d1d9; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 10; bottom: 130%; left: 50%; margin-left: -130px; border: 1px solid #30363d; font-size: 12px; font-weight: normal; line-height: 1.6; opacity: 0; transition: opacity 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.8); }
 .zone-tooltip .zone-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #30363d transparent transparent transparent; }
@@ -311,7 +314,7 @@ def render_market_dashboard():
         tot_sgn = "+" if f['total'] > 0 else ""
         val_f, val_t, val_tot = f"{f['foreign']:,}", f"{f['trust']:,}", f"{f['total']:,}"
         
-        html_block += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr} tabular-nums'>{f_sgn}{val_f}</td><td class='{t_clr} tabular-nums'>{t_sgn}{val_t}</td><td class='{tot_clr} tabular-nums' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>"
+        html_block += f"<tr style='background-color:{bg};'><td>{icon} <div class='tooltip-container has-dotted'><b>{f['sector']}</b><span class='tooltip-text'>{f['tooltip']}</span></div></td><td class='{f_clr} tabular-nums'>{f_sgn}{val_f}</td><td class='{t_clr} tabular-nums'>{t_sgn}{val_t}</td><td class='{tot_clr} tabular-nums' style='font-size:16px;'>{tot_sgn}{val_tot}</td></tr>"
 
     html_block += """</tbody></table></div></div>"""
     st.markdown(html_block.replace('\n', ''), unsafe_allow_html=True)
@@ -479,45 +482,54 @@ def calculate_factors_and_score(df, chips, live_price, prev_close, market_status
     total_score = base_score + (core_c1 * 2) + (core_c2 * 2) + (chip_c1 * 1)
     cond_list = [base_c1, base_c2, base_c3, base_c4, base_c5, core_c1, core_c2, chip_c1]
 
+    # 🚀 輔助函數：生成帶有白話文解釋的 Tooltip 標籤
+    def add_bull(cat, text, tip): bulls[cat].append(f"<div class='tooltip-container'><span style='border-bottom:1px dotted #8b949e;'>{text}</span><span class='tooltip-text'>{tip}</span></div>")
+    def add_bear(cat, text, tip): bears[cat].append(f"<div class='tooltip-container'><span style='border-bottom:1px dotted #8b949e;'>{text}</span><span class='tooltip-text'>{tip}</span></div>")
+    def add_bull_no_tip(cat, text): bulls[cat].append(text)
+    def add_bear_no_tip(cat, text): bears[cat].append(text)
+
     if chips['status'] == 'success':
-        if chips['f_buy_5d'] > 0: bulls["籌碼與基本面"].append(f"外資近5日買超 {chips['f_buy_5d']:,} 張")
-        elif chips['f_buy_5d'] < 0: bears["籌碼與基本面"].append(f"外資近5日賣超 {abs(chips['f_buy_5d']):,} 張")
-        if chips['t_buy_5d'] > 0: bulls["籌碼與基本面"].append(f"投信近5日買超 {chips['t_buy_5d']:,} 張")
-        elif chips['t_buy_5d'] < 0: bears["籌碼與基本面"].append(f"投信近5日賣超 {abs(chips['t_buy_5d']):,} 張")
-        if chips['f_consec'] >= 3: bulls["籌碼與基本面"].append(f"外資連續買超 {chips['f_consec']} 天")
-        elif chips['f_consec'] <= -3: bears["籌碼與基本面"].append(f"外資連續賣超 {abs(chips['f_consec'])} 天")
-        if chips['t_consec'] >= 3: bulls["籌碼與基本面"].append(f"投信連續買超 {chips['t_consec']} 天")
-        elif chips['t_consec'] <= -3: bears["籌碼與基本面"].append(f"投信連續賣超 {abs(chips['t_consec'])} 天")
+        if chips['f_buy_5d'] > 0: add_bull_no_tip("籌碼與基本面", f"外資近5日買超 {chips['f_buy_5d']:,} 張")
+        elif chips['f_buy_5d'] < 0: add_bear_no_tip("籌碼與基本面", f"外資近5日賣超 {abs(chips['f_buy_5d']):,} 張")
+        if chips['t_buy_5d'] > 0: add_bull_no_tip("籌碼與基本面", f"投信近5日買超 {chips['t_buy_5d']:,} 張")
+        elif chips['t_buy_5d'] < 0: add_bear_no_tip("籌碼與基本面", f"投信近5日賣超 {abs(chips['t_buy_5d']):,} 張")
+        if chips['f_consec'] >= 3: add_bull_no_tip("籌碼與基本面", f"外資連續買超 {chips['f_consec']} 天")
+        elif chips['f_consec'] <= -3: add_bear_no_tip("籌碼與基本面", f"外資連續賣超 {abs(chips['f_consec'])} 天")
+        if chips['t_consec'] >= 3: add_bull_no_tip("籌碼與基本面", f"投信連續買超 {chips['t_consec']} 天")
+        elif chips['t_consec'] <= -3: add_bear_no_tip("籌碼與基本面", f"投信連續賣超 {abs(chips['t_consec'])} 天")
     else:
-        bulls["籌碼與基本面"].append("API 公共額度限制")
-        bears["籌碼與基本面"].append("API 公共額度限制")
+        add_bull_no_tip("籌碼與基本面", "API 公共額度限制")
+        add_bear_no_tip("籌碼與基本面", "API 公共額度限制")
     
-    if live_price >= L['Resist']: bulls["價量與型態"].append(f"突破近 21 日壓力 ({L['Resist']:.1f})")
-    if live_price <= L['Support']: bears["價量與型態"].append(f"跌破近 21 日支撐 ({L['Support']:.1f})")
-    if L['SMA14'] > L['SMA21'] and P['SMA14'] <= P['SMA21']: bulls["價量與型態"].append("SMA14 上穿 SMA21")
-    if L['SMA14'] < L['SMA21'] and P['SMA14'] >= P['SMA21']: bears["價量與型態"].append("SMA14 跌破 SMA21")
-    if core_c2: bulls["價量與型態"].append("短中期均線皆向上")
+    if live_price >= L['Resist']: add_bull("價量與型態", f"突破近 21 日壓力 ({L['Resist']:.1f})", "股價創下近一個月新高，上檔無套牢賣壓，是右側交易的起漲訊號。")
+    if live_price <= L['Support']: add_bear("價量與型態", f"跌破近 21 日支撐 ({L['Support']:.1f})", "股價跌破近一個月低點，防線失守，趨勢翻空。")
+    
+    if L['SMA14'] > L['SMA21'] and P['SMA14'] <= P['SMA21']: add_bull("價量與型態", "SMA14 上穿 SMA21", "短線均線突破波段均線(黃金交叉)，代表短期買盤力道強於長期成本，趨勢轉多。")
+    if L['SMA14'] < L['SMA21'] and P['SMA14'] >= P['SMA21']: add_bear("價量與型態", "SMA14 跌破 SMA21", "短線均線跌破波段均線(死亡交叉)，短期賣壓沉重，趨勢轉空。")
+    
+    if core_c2: add_bull("價量與型態", "短中期均線皆向上", "均線多頭發散，市場整體成本同步墊高，是最強勢的主升段特徵。")
     
     vr = L['Vol_Ratio']
-    if vr > 1.3: bulls["價量與型態"].append(f"放量突破 7 日均量 ({vr:.1f}x)")
-    elif vr < 0.8: bears["價量與型態"].append(f"量能低迷萎縮 ({vr:.1f}x)")
+    if vr > 1.3: add_bull("價量與型態", f"放量突破 7 日均量 ({vr:.1f}x)", "成交量大幅超越近期平均，代表有大資金實質介入，推升力道可靠。")
+    elif vr < 0.8: add_bear("價量與型態", f"量能低迷萎縮 ({vr:.1f}x)", "成交量明顯小於近期平均，缺乏資金動能，股價容易陷入盤整或虛漲。")
     
     if chg_pct > 0 and L['MACD_Hist'] < P['MACD_Hist'] and vr < 1.0:
-        bears["價量與型態"].append("價漲但量縮且動能背離")
+        add_bear("價量與型態", "價漲但量縮且動能背離", "股價上漲但成交量萎縮，且指標動能減弱(量價背離)，可能是誘多陷阱，追高需謹慎。")
 
-    if L['OBV'] > L['OBV_MA14']: bulls["技術指標"].append("OBV 能量潮 &gt; 14日均線")
-    else: bears["技術指標"].append("OBV 能量潮 &lt; 14日均線")
+    if L['OBV'] > L['OBV_MA14']: add_bull("技術指標", "OBV 能量潮 &gt; 14日均線", "大戶測謊機：上漲時有帶量、下跌時有量縮，代表背後有主力大戶正在默默吃貨。")
+    else: add_bear("技術指標", "OBV 能量潮 &lt; 14日均線", "大戶測謊機：上漲無量、下跌帶量，代表背後大戶可能正在逢高倒貨出脫。")
     
-    if L['MACD_Hist'] > 0 and P['MACD_Hist'] <= 0: bulls["技術指標"].append("Histogram 翻紅向上")
-    elif L['MACD_Hist'] < 0 and P['MACD_Hist'] >= 0: bears["技術指標"].append("Histogram 翻綠向下")
+    if L['MACD_Hist'] > 0 and P['MACD_Hist'] <= 0: add_bull("技術指標", "Histogram 翻紅向上", "趨勢溫度計：MACD柱狀體由負轉正，代表中期的空方跌勢結束，多方開始接管戰局。")
+    elif L['MACD_Hist'] < 0 and P['MACD_Hist'] >= 0: add_bear("技術指標", "Histogram 翻綠向下", "趨勢溫度計：MACD柱狀體由正轉負，代表中期的多方漲勢結束，空方開始接管戰局。")
     
-    if L['K'] < 50 and L['K'] > L['D']: bulls["技術指標"].append(f"KD 低檔金叉 (K:{L['K']:.0f}&gt;D:{L['D']:.0f})")
-    elif L['K'] > 80 and L['K'] < L['D']: bears["技術指標"].append(f"KD 高檔死叉 (K:{L['K']:.0f}&lt;D:{L['D']:.0f})")
+    if L['K'] < 50 and L['K'] > L['D']: add_bull("技術指標", f"KD 低檔金叉 (K:{L['K']:.0f}&gt;D:{L['D']:.0f})", "極端值警報器：股價跌深後指標在低檔黃金交叉，通常代表短線超跌反彈的契機。")
+    elif L['K'] > 80 and L['K'] < L['D']: add_bear("技術指標", f"KD 高檔死叉 (K:{L['K']:.0f}&lt;D:{L['D']:.0f})", "極端值警報器：股價漲幅過大後指標在高檔死亡交叉，代表短線過熱，面臨回檔修正壓力。")
     
-    if L['RSI'] > 60: bulls["技術指標"].append("RSI(14) &gt; 60 短線極強")
-    elif L['RSI'] < 50: bears["技術指標"].append("RSI(14) &lt; 50 短線偏弱")
-    if L['RSI50'] > 50: bulls["技術指標"].append("RSI(50) &gt; 50 中期偏多")
-    elif L['RSI50'] < 50: bears["技術指標"].append("RSI(50) &lt; 50 中期偏弱")
+    if L['RSI'] > 60: add_bull("技術指標", "RSI(14) &gt; 60 短線極強", "短線爆發力指標：大於 60 代表目前股價上漲的爆發力非常猛烈，多頭強勢控盤。")
+    elif L['RSI'] < 50: add_bear("技術指標", "RSI(14) &lt; 50 短線偏弱", "短線爆發力指標：小於 50 代表近期股價下跌力道大於上漲，處於弱勢格局。")
+    
+    if L['RSI50'] > 50: add_bull("技術指標", "RSI(50) &gt; 50 中期偏多", "中期底氣指標：大於 50 代表這檔股票長期趨勢是向上發展的，底子穩健。")
+    elif L['RSI50'] < 50: add_bear("技術指標", "RSI(50) &lt; 50 中期偏弱", "中期底氣指標：小於 50 代表股票長期趨勢依然偏空，短線的反彈容易遭遇解套賣壓。")
 
     stop_short = min(L['SMA14'], df['Low'].tail(5).min())
     stop_swing = min(L['SMA21'], L['Support'])
@@ -662,6 +674,7 @@ else:
             t_color = "#f85149" if bull_count > bear_count else "#3fb950" if bear_count > bull_count else "#c9d1d9"
             score_clr = "text-red" if total_score >= 7 else "text-green" if total_score <= 3 else "text-yellow"
 
+            # 🚀 空值顯示
             def g_list(items, bg): return "".join([f"<div style='padding:4px 8px; margin-bottom:4px; background:{bg}; color:#c9d1d9; font-size:12px; border-radius:4px;'>{item}</div>" for item in items]) if items else "<div style='font-size:12px; color:#484f58; padding:4px; font-style:italic;'>無訊號</div>"
             def g_block(cat): return f"<div style='color:#8b949e; font-size:11px; margin:10px 0 4px 0;'>{cat}</div><div style='display:flex; gap:6px;'><div style='flex:1;'>{g_list(bulls[cat], 'rgba(248,81,73,0.15)')}</div><div style='flex:1;'>{g_list(bears[cat], 'rgba(63,185,80,0.15)')}</div></div>"
             def check_item(is_pass, title, desc): return "<details style='margin-bottom:4px; background: rgba(255,255,255,0.02); border-radius: 6px;'><summary>" + ("<span class='text-red'>✅</span>" if is_pass else "<span class='text-green'>❌</span>") + " <span style='color:#ffffff; font-weight:bold; margin-left:6px;'>" + title + "</span></summary><div class='info-box' style='color:#8b949e; font-size:11px;'>" + desc + "</div></details>"
